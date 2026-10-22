@@ -1,0 +1,26 @@
+[project]
+name = "cloudfront-waf"
+version = "0.1.0"
+description = "CloudFront and AWS WAF in front of home services"
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.basedpyright]
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+
+[tool.ruff.lint.isort]
+force-single-line = true
+single-line-exclusions = ["collections.abc", "typing"]
+
+[dependency-groups]
+dev = [
+    "cfn-lint>=1.57.2",
+    "pytest>=9.1.1",
+    "pyyaml>=6.0.3",
+]
+
+[tool.uv]
+package = false
+exclude-newer = "4 days"
