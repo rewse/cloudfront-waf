@@ -176,10 +176,28 @@ def test_hosting_provider_list_is_count(template: dict[str, Any]) -> None:
     assert _action_overrides(rule) == {"HostingProviderIPList": {"Count": {}}}
 
 
-def test_body_size_rule_is_always_count(template: dict[str, Any]) -> None:
+def test_common_rule_set_overrides_are_always_count(template: dict[str, Any]) -> None:
     rule = _rules(template)["AWSManagedRulesCommonRuleSet"]
 
-    assert _action_overrides(rule) == {"SizeRestrictions_BODY": {"Count": {}}}
+    # Large bodies come from webhooks, CouchDB, and nas uploads; requests
+    # without a User-Agent from rare callers such as Alexa and Tesla.
+    assert _action_overrides(rule) == {
+        "NoUserAgent_HEADER": {"Count": {}},
+        "SizeRestrictions_BODY": {"Count": {}},
+    }
+
+
+def test_bot_control_api_client_rules_are_always_count(
+    template: dict[str, Any],
+) -> None:
+    rule = _rules(template)["AWSManagedRulesBotControlRuleSet"]
+
+    # Home Assistant webhooks arrive from Go-http-client, and Alexa and Tesla
+    # call too rarely for the count period to show them.
+    assert _action_overrides(rule) == {
+        "CategoryHttpLibrary": {"Count": {}},
+        "SignalNonBrowserUserAgent": {"Count": {}},
+    }
 
 
 def test_count_phase_rule_groups_follow_parameter(template: dict[str, Any]) -> None:

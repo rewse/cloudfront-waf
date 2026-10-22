@@ -232,9 +232,11 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesKnownBadInputsRuleSet
             SampledRequestsEnabled: true
-        # SizeRestrictions_BODY stays in count mode even when the group
-        # blocks: Home Assistant webhooks, CouchDB, and nas uploads send
-        # bodies larger than its 8 KB limit.
+        # Two rules stay in count mode even when the group blocks.
+        # SizeRestrictions_BODY: Home Assistant webhooks, CouchDB, and nas
+        # uploads send bodies larger than its 8 KB limit. NoUserAgent_HEADER:
+        # API callers such as Alexa and Tesla call too rarely for the count
+        # period to show whether they send a User-Agent.
         - Name: AWSManagedRulesCommonRuleSet
           Priority: 6
           OverrideAction: !If
@@ -246,6 +248,9 @@ Resources:
               VendorName: AWS
               Name: AWSManagedRulesCommonRuleSet
               RuleActionOverrides:
+                - Name: NoUserAgent_HEADER
+                  ActionToUse:
+                    Count: {}
                 - Name: SizeRestrictions_BODY
                   ActionToUse:
                     Count: {}
@@ -298,7 +303,11 @@ Resources:
             SampledRequestsEnabled: true
         # The common inspection level labels self-identifying bots. The
         # targeted level costs more and relies on browser challenges that the
-        # API clients of the home services cannot answer.
+        # API clients of the home services cannot answer. Two rules stay in
+        # count mode even when the group blocks, because they match those API
+        # clients: CategoryHttpLibrary (Home Assistant webhooks arrive from
+        # Go-http-client) and SignalNonBrowserUserAgent. Alexa and Tesla call
+        # too rarely for the count period to show their false positives.
         - Name: AWSManagedRulesBotControlRuleSet
           Priority: 10
           OverrideAction: !If
@@ -312,6 +321,13 @@ Resources:
               ManagedRuleGroupConfigs:
                 - AWSManagedRulesBotControlRuleSet:
                     InspectionLevel: COMMON
+              RuleActionOverrides:
+                - Name: CategoryHttpLibrary
+                  ActionToUse:
+                    Count: {}
+                - Name: SignalNonBrowserUserAgent
+                  ActionToUse:
+                    Count: {}
           VisibilityConfig:
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesBotControlRuleSet
