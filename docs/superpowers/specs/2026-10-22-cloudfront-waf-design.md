@@ -33,7 +33,7 @@ fox（自宅の Raspberry Pi）で動くサービスは、UDM の WAN ポート�
 - 上の 10 個の名前へのインターネットからのリクエストが、すべて CloudFront と WAF を通る。
 - 自宅の WAN IP（IPv4）とグローバル IPv6 に直接来た 80 / 443 の通信は届かない。家の中と、VPN の向こうの所有者の VPC からの通信は除く。
 - 本人の利用、HA アプリ、外部連携は、どこにいても今まで通り動く。
-- fail2ban と Apache の `Require ip` が、本当のクライアント IP で今まで通り効く。
+- fail2ban と Apache の `Require ip` が、本当のクライアント IP で今まで通り効く。fail2ban の締め出しは、Apache とホストのファイアウォールの両方で効く。
 - WAF が止めた件数と CloudFront のエラーを Zabbix で見て、アラートを受けられる。
 - AWS 側の定義を公開リポジトリ `rewse/cloudfront-waf` に置く（所有者の判断）。
 
@@ -115,6 +115,8 @@ WAF のログを出力先（CloudWatch Logs か S3）に出し、Count の期間
 ### Apache
 
 - `mod_remoteip` を有効にし、信頼するプロキシは CloudFront のオリジン向け IP レンジ（`ip-ranges.json` の `CLOUDFRONT_ORIGIN_FACING`）だけにする。これで、アクセスログ、fail2ban、`Require ip` のすべてが本当のクライアント IP を見る。
+- HTTP のサービスを守る fail2ban の jail は、ホストのファイアウォールに加えて Apache でも締め出す。CloudFront 経由では TCP の接続元がすべてエッジなので、ファイアウォールの締め出しは直接つないできたクライアントにしか効かないため（所有者の判断）。jail が締め出すたびに、締め出したアドレスを `-R` で拒否するだけの `<If>` を jail ごとのファイルに書き出し、Apache を graceful に再読み込みする。`-R` は `mod_remoteip` が戻したクライアント IP を見るので、CloudFront 経由でも直接でも効く。SSH の jail はファイアウォールだけで締め出す。
+- CloudFront のオリジン向けレンジは、fail2ban の `ignoreip` に入れる。ログがクライアント IP を戻しそこねても、エッジを締め出さないようにするため（こちらの判断）。
 - 秘密ヘッダーのないリクエストは、拒否する。ただし、家の中のアドレス（`192.168.0.0/24` と自宅の IPv6 プレフィックス）、VPN の向こうの AWS のアドレス（`aws_private_ipv4` と `aws_public_ipv6`）、loopback は除く。VPN の向こうは所有者の VPC なので、家の中と同じ扱いにする（所有者の判断）。fox と hotel の両方に入れる。
 - `/admin`、`/server-status`、`/zabbix` の許可リストのうち社内の出口の部分は、1Password の項目から描画する。
 
@@ -124,7 +126,7 @@ WAF のログを出力先（CloudWatch Logs か S3）に出し、Count の期間
 - WAN からの 80 は受けない。CloudFront がビューワー側で HTTPS へリダイレクトし、certbot は DNS 検証なので、80 は不要になる。`homeassistant-name-switch` は 80 のフォワードがないと失敗扱いにするので、`homeassistant_ha_secondary` も合わせて直す。
 - IPv6 では、fox への 80 / 443 を WAN から受けない。
 - SSH の 11022 と 21022 は、IPv4 と IPv6 ともに今のまま開けておく。CloudFront では SSH を中継できず、公開鍵認証のみで fail2ban の sshd の jail もあるため（こちらの判断）。
-- CloudFront のレンジは Ansible の実行時に `ip-ranges.json` から取る。
+- CloudFront のレンジは Ansible の実行時に `ip-ranges.json` から取る。レンジが増えたことは Zabbix で検知し、自動では反映しない（こちらの判断）。
 
 ### 切り替えの順番
 
@@ -156,7 +158,7 @@ CloudWatch のメトリクスを Zabbix に取り込む。alfa の `zabbix_aws`�
 - `54.64.81.21` からの Webhook が引き続き 200 で返る。
 - `rewse.jp/blog/...` のリダイレクトと `/autodiscover` が動く。
 - `/admin`、`/server-status`、`/zabbix` が、許可リストの中からは開けて、外からは拒否される。`X-Forwarded-For` を偽装しても拒否される。
-- fail2ban が本当のクライアント IP で締め出す。
+- fail2ban が本当のクライアント IP で締め出し、締め出したアドレスからのリクエストを、CloudFront 経由でも Apache が拒否する。
 - 自宅の WAN IP と fox の IPv6 に直接つなぐと、80 / 443 がつながらない。
 - AWS の VPC の中から、今まで通り fox に直接つながる。
 - 家の中からは、今まで通り fox に直接つながる。

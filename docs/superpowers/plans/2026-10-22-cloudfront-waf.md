@@ -126,11 +126,11 @@ def test_office_cidrs_come_from_parameter(): ...                  # IPSet の Ad
 | 3 | RateLimitLogin | 100 / 300 秒 / IP。パスが `/auth/`、`/login`、`/api/login` で始まるもの |
 | 4 | RateLimitAll | 3000 / 300 秒 / IP |
 | 5 | AWSManagedRulesKnownBadInputsRuleSet | `BlockManagedRules` に従う |
-| 6 | AWSManagedRulesCommonRuleSet | `BlockManagedRules` に従う。`SizeRestrictions_BODY` は常に Count |
+| 6 | AWSManagedRulesCommonRuleSet | `BlockManagedRules` に従う。`SizeRestrictions_BODY` と `NoUserAgent_HEADER` は常に Count |
 | 7 | AWSManagedRulesLinuxRuleSet | `BlockManagedRules` に従う |
 | 8 | AWSManagedRulesUnixRuleSet | `BlockManagedRules` に従う |
 | 9 | AWSManagedRulesPHPRuleSet | `BlockManagedRules` に従う |
-| 10 | AWSManagedRulesBotControlRuleSet | InspectionLevel COMMON。`BlockManagedRules` に従う |
+| 10 | AWSManagedRulesBotControlRuleSet | InspectionLevel COMMON。`BlockManagedRules` に従う。`CategoryHttpLibrary` と `SignalNonBrowserUserAgent` は常に Count |
 | 11 | GeoLabel | Count とラベル `cloudfront-waf:outside-japan-and-office` |
 
 レートのしきい値は、2 週間のログで本人の IP の最大が 5 分あたり 1,100 件、ログイン系のパスが 11 件だったことから決めた。
@@ -328,31 +328,34 @@ UDM で 80 のフォワードを消すのは Task 16 なので、それまでに
 
 ### Task 13: Apache を適用する（段階 2）
 
-- [ ] **Step 1:** ansible-playbooks の Task 5〜8 の変更を、fox と hotel に `--tags httpd_remoteip,httpd_cloudfront_origin,httpd_conf,homeassistant_ha_secondary_failover` で適用する（タグ名は実在するものを確かめる）。`httpd_cloudfront_origin_enforce` は `false` のまま。
-- [ ] **Step 2:** 家の外の回線（たとえばスマートフォンのテザリング）から、`curl -s -H "X-Forwarded-For: 192.168.0.10" https://rewse.jp/server-status` が 403 になることを確かめる。直接届いたリクエストの偽の `X-Forwarded-For` を、Apache が信じないことを見るため。`other_vhosts_access.log` の第 2 欄が、本当の送信元の IP になっていることも確かめる。
-- 戻し方: `a2disconf remoteip cloudfront-origin && a2dismod remoteip && systemctl restart apache2` と、ansible-playbooks の revert。
+- [ ] **Step 1:** ansible-playbooks の変更を、`httpd_cloudfront_origin_enforce` を `false` のまま適用する。fox には `home-primary.yml` を `--tags httpd,filebrowser_apache,teslamate_apache,couchdb_fail2ban,filebrowser_fail2ban,homeassistant_fail2ban,litellm_fail2ban,nvr_fail2ban,teslamate_fail2ban,zabbix_server_fail2ban` で、hotel には `home-secondary.yml` を `--tags httpd,homeassistant_ha_secondary_failover,homeassistant_ha_secondary_fail2ban` で流す（タグ名は `ansible-playbook --list-tags` で確かめた）。`filebrowser_apache` と `teslamate_apache` は、httpd ロールの外にある Task 6 の直し（`nas` の `X-Forwarded-For` の unset と `grafana_basic_auth.log` の `%a`）を入れる。これがないと fail2ban が CloudFront のエッジを締め出す。`*_fail2ban` は HTTP の jail に Apache で締め出すアクションを足す。hotel の `homeassistant_ha_secondary_failover` は、443 だけを動かす `homeassistant-name-switch` を入れる（Task 16 で 80 のフォワードを消す前に要る）。
+- [ ] **Step 2:** DNS を切り替える前に、`curl --resolve` で CloudFront 経由のリクエストをいくつか送り、fail2ban が読む Apache のログ（`access.log`、`other_vhosts_access.log`、`grafana_basic_auth.log`）のクライアント欄に CloudFront のオリジン向けのアドレスが現れないことを確かめる（手順は `docs/setup.md` の段階 2）。
+- [ ] **Step 3:** 家の外の回線（たとえばスマートフォンのテザリング）から、`curl -s -H "X-Forwarded-For: 192.168.0.10" https://rewse.jp/server-status` が 403 になることを確かめる。直接届いたリクエストの偽の `X-Forwarded-For` を、Apache が信じないことを見るため。`other_vhosts_access.log` の第 2 欄が、本当の送信元の IP になっていることも確かめる。
+- 戻し方: `a2disconf remoteip cloudfront-origin fail2ban-apache-deny && a2dismod remoteip && systemctl restart apache2` と、ansible-playbooks の revert。
 
 ### Task 14: DNS を切り替えて確かめる（段階 3）
 
 - [ ] **Step 1:** `scripts/switch-dns.sh cloudfront --dry-run` の中身を所有者に見せてから、本番で実行する。
-- [ ] **Step 2:** 設計書の「確認項目」を、上から順に確かめる（ブラウザでの確認は `browser-automation` スキルに従う）。WAF のログで、`54.64.81.21` のリクエストと、Count になったルールを確かめる。HA のフェイルオーバーの確認は、`homeassistant-name-switch standby` と `primary` を所有者の確認を取ってから実行する。
+- [ ] **Step 2:** 設計書の「確認項目」を、上から順に確かめる（ブラウザでの確認は `browser-automation` スキルに従う）。CouchDB の `_changes` のロングポールは既定で 60 秒待ち、オリジンの読み取りタイムアウトと同じなので、CloudFront の `504ErrorRate` を見て 504 が出ていないか確かめる。WAF のログで、`54.64.81.21` のリクエストと、Count になったルールを確かめる。HA のフェイルオーバーの確認は、`homeassistant-name-switch standby` と `primary` を所有者の確認を取ってから実行する。
 - 戻し方: `scripts/switch-dns.sh origin`。
 
 ### Task 15: オリジン検証を有効にする（段階 4）
 
-- [ ] **Step 1:** 両方のグループの inventory で `httpd_cloudfront_origin_enforce: true` にして commit し、fox と hotel に適用する。
-- [ ] **Step 2:** 家の外の回線から `curl -sk --resolve hass.rewse.jp:443:106.163.184.9 https://hass.rewse.jp/` が 403、CloudFront 経由が 200 であることを確かめる。家の中と alfa からの直接のアクセスが今まで通り通ることも確かめる。
+- [ ] **Step 1:** 有効にする前に、アクセスログで Docker のブリッジ（`172.16.0.0/12`）から公開名を叩いているクライアントを探す。免除の対象ではないので、有効にすると 403 になる（手順は `docs/setup.md` の段階 4）。
+- [ ] **Step 2:** 両方のグループの inventory で `httpd_cloudfront_origin_enforce: true` にして commit し、fox と hotel に適用する。
+- [ ] **Step 3:** 家の外の回線から `curl -sk --resolve hass.rewse.jp:443:106.163.184.9 https://hass.rewse.jp/` が 403、CloudFront 経由が 200 であることを確かめる。家の中と alfa からの直接のアクセスが今まで通り通ることも確かめる。
 - 戻し方: `false` に戻して適用する。
 
 ### Task 16: UDM を閉じる（段階 5）
 
 - [ ] **Step 1:** `udm_cloudfront_enforce: true` にして、`udm.yml` を `--tags udm_cloudfront` で適用する。
 - [ ] **Step 2:** 家の外の回線から、`106.163.184.9` の 443 と 80、fox の IPv6 の 443 と 80 に TCP でつながらないことを確かめる（`nc -vz -w 5`）。11022 と 21022 には今まで通りつながる。CloudFront 経由で 10 個の名前すべてが開ける。
-- 戻し方: UniFi の UI で、443 のフォワードのソース制限を外し、80 のフォワードと IPv6 の許可を作り直す。消す前に、元のオブジェクトの JSON を `/tmp` の実行ディレクトリに保存しておく。
+- 戻し方: `udm_cloudfront_enforce` を `false` に戻すだけでは元に戻らない（`false` ではアドレスグループの同期しかしない）。まず `false` にして次の実行で閉じ直さないようにし、UniFi の UI で、443 のフォワードのソース制限を外し、80 のフォワードと IPv6 の許可を作り直す。値は、変更の前に Ansible の実行元の `~/.local/state/udm-cloudfront/` に保存した元のオブジェクトの JSON から取る。
+- 段階を戻すときは逆順に戻す。`switch-dns.sh origin` は段階 5 と 4 を戻してから実行する。UDM が 443 と 80 をどこからでも通し、Apache が秘密ヘッダーのないリクエストを受けるようになるまでは、DNS で自宅に向かったクライアントが拒否され、すべての名前が使えなくなるため。
 
 ### Task 17: Zabbix のアイテムとトリガー
 
-- [ ] **Step 1:** Task 10 のスクリプトを alfa に適用し、Zabbix にトラッパーアイテム（Task 10 のキー）とトリガーを直接作る。トリガーは、`cloudfront.error_rate.5xx` の 15 分平均が 5% を超えたら High、`waf.requests.blocked` が 5 分で 500 を超えたら Warning、`cloudfront.requests` が 30 分届かなければ Warning。作ったら `zabbix-server` を再起動する（AGENTS.md の Zabbix の規約）。
+- [ ] **Step 1:** Task 10 のスクリプトを alfa に適用し、Zabbix にトラッパーアイテム（Task 10 のキー）とトリガーを直接作る。5xx のトリガーは、Task 14 で CouchDB のロングポールの 504 を確かめてから作る。fox には、エージェントのキー `apache.remoteip.missing_prefixes` のアイテムと、0 でないときのトリガーも作る。トリガーは、`cloudfront.error_rate.5xx` の 15 分平均が 5% を超えたら High、`waf.requests.blocked` が 5 分で 500 を超えたら Warning、`cloudfront.requests` が 30 分届かなければ Warning。作ったら `zabbix-server` を再起動する（AGENTS.md の Zabbix の規約）。
 - [ ] **Step 2:** 値が届いていることを Zabbix の Latest data で確かめる。
 
 ### Task 18: Block に切り替える（段階 6）
