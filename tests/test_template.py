@@ -38,6 +38,8 @@ RULE_ORDER = [
 ]
 
 COUNT_PHASE_RULE_GROUPS = [
+    "AWSManagedRulesAmazonIpReputationList",
+    "AWSManagedRulesAnonymousIpList",
     "AWSManagedRulesBotControlRuleSet",
     "AWSManagedRulesCommonRuleSet",
     "AWSManagedRulesKnownBadInputsRuleSet",
@@ -166,19 +168,11 @@ def test_pentest_rule_allows_on_exact_header(template: dict[str, Any]) -> None:
     assert match["SearchString"] == "PentestHeaderValue"
 
 
-def test_reputation_lists_block(template: dict[str, Any]) -> None:
-    rules = _rules(template)
-
-    for name in [
-        "AWSManagedRulesAmazonIpReputationList",
-        "AWSManagedRulesAnonymousIpList",
-    ]:
-        assert rules[name]["OverrideAction"] == {"None": {}}, name
-
-
 def test_hosting_provider_list_is_count(template: dict[str, Any]) -> None:
     rule = _rules(template)["AWSManagedRulesAnonymousIpList"]
 
+    # A plain mapping, not an !If on BlockManagedRules, so the rule counts
+    # whether or not the group blocks.
     assert _action_overrides(rule) == {"HostingProviderIPList": {"Count": {}}}
 
 

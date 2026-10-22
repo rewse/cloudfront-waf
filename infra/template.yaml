@@ -87,10 +87,10 @@ Resources:
       IPAddressVersion: IPV4
       Addresses: !Ref OfficeCidrs
 
-  # Rules run in priority order and the default is Allow. The reputation
-  # lists and the rate limits block from the first deployment; the other
-  # managed rule groups follow BlockManagedRules so they can run in count
-  # mode until the WAF logs show their false positives.
+  # Rules run in priority order and the default is Allow. Only the pentest
+  # Allow rule and the rate-based rules act from the first deployment; every
+  # managed rule group follows BlockManagedRules so it can run in count mode
+  # until the WAF logs show its false positives.
   WebAcl:
     Type: AWS::WAFv2::WebACL
     Properties:
@@ -126,8 +126,10 @@ Resources:
             SampledRequestsEnabled: true
         - Name: AWSManagedRulesAmazonIpReputationList
           Priority: 1
-          OverrideAction:
-            None: {}
+          OverrideAction: !If
+            - BlockManagedRuleGroups
+            - None: {}
+            - Count: {}
           Statement:
             ManagedRuleGroupStatement:
               VendorName: AWS
@@ -136,14 +138,16 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesAmazonIpReputationList
             SampledRequestsEnabled: true
-        # HostingProviderIPList stays in count mode: legitimate callers run on
-        # EC2 and Lambda (an unidentified webhook caller, the Alexa backend,
-        # probably Tesla), and Alexa and Tesla call too rarely for a count
-        # period to reveal false positives.
+        # HostingProviderIPList stays in count mode even when the group
+        # blocks: legitimate callers run on EC2 and Lambda (an unidentified
+        # webhook caller, the Alexa backend, probably Tesla), and Alexa and
+        # Tesla call too rarely for a count period to reveal false positives.
         - Name: AWSManagedRulesAnonymousIpList
           Priority: 2
-          OverrideAction:
-            None: {}
+          OverrideAction: !If
+            - BlockManagedRuleGroups
+            - None: {}
+            - Count: {}
           Statement:
             ManagedRuleGroupStatement:
               VendorName: AWS
