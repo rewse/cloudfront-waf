@@ -23,7 +23,7 @@ uv run cfn-lint infra/template.yaml
 AWS_PROFILE=admin scripts/deploy.sh
 ```
 
-`scripts/deploy.sh` reads the three items with `op read` and passes them to `aws cloudformation deploy` in a temporary JSON file, so they never appear in argv. The file is removed on exit. The first deployment is slow because the certificate validates through DNS and the distribution has to propagate.
+`scripts/deploy.sh` reads the three items with `op read` and passes them to `aws cloudformation deploy` in a temporary JSON file, so they never appear in argv. The file is removed on exit. The same file carries every value in `infra/parameters.json`, the committed state of the parameters that are not secret (`BlockManagedRules` and `HomePublicIpv4`). The first deployment is slow because the certificate validates through DNS and the distribution has to propagate.
 
 Every managed rule group starts in count mode, so only the pentest allow rule and the rate-based rules act on requests. The stack outputs `DistributionDomainName`, which `scripts/switch-dns.sh` reads. Rerun the same command for any later template or secret change.
 
@@ -50,13 +50,13 @@ Do the steps in order and check each result before the next. The `httpd` and `ud
 3. Switch the public DNS with `AWS_PROFILE=admin scripts/switch-dns.sh cloudfront`, then run the checklist in the verification section of the design document, `docs/superpowers/specs/2026-10-22-cloudfront-waf-design.md` (written in Japanese). To undo it, run `AWS_PROFILE=admin scripts/switch-dns.sh origin`.
 4. Set `httpd_cloudfront_origin_enforce` to `true` and apply the `httpd` role to fox and hotel. Requests without `X-Origin-Verify` now get a 403, except those from the home network, the VPN, and loopback. To undo it, set the variable to `false` and apply again.
 5. Set `udm_cloudfront_enforce` to `true` and apply the `udm` role. WAN port 443 then accepts only the CloudFront origin-facing ranges, port 80 and IPv6 80 and 443 are closed, and SSH stays open. To undo it, set the variable to `false` and apply again.
-6. Watch the WAF logs for one to two weeks, remove false positives, then turn on blocking as described next. To undo it, set `BlockManagedRules` back to `"false"` and deploy again.
+6. Watch the WAF logs for one to two weeks, remove false positives, then turn on blocking as described next. To undo it, set `BlockManagedRules` back to `"false"` in `infra/parameters.json` and deploy again.
 
 ## Turn on blocking
 
-`BlockManagedRules` defaults to `"false"`. Set it to `"true"` once the count period shows no false positives. The IP reputation list, the Anonymous IP list (except `HostingProviderIPList`, which always counts), and the other managed groups then block.
+`BlockManagedRules` is `"false"` in `infra/parameters.json`. Set it to `"true"` once the count period shows no false positives. The IP reputation list, the Anonymous IP list, and the other managed groups then block. A few sub-rules keep counting either way, through the rule action overrides in `infra/template.yaml`: `HostingProviderIPList`, `SizeRestrictions_BODY`, `NoUserAgent_HEADER`, `CategoryHttpLibrary`, and `SignalNonBrowserUserAgent`. They match legitimate API callers: Home Assistant webhooks sent by Go-http-client, and Alexa and Tesla, which call too rarely for the count period to show them.
 
-`scripts/deploy.sh` passes only the three secrets, so change the `Default` of `BlockManagedRules` in `infra/template.yaml` to `"true"`, commit it, and run the deploy command again. To go back, restore the default to `"false"` and deploy again.
+`aws cloudformation deploy` keeps the previous value of a parameter it is not given, so changing a template `Default` alone never reaches the stack. Change the value in `infra/parameters.json` and the matching `Default` in `infra/template.yaml` (the tests check that the two agree), commit both, and run the deploy command again. To go back, set both to `"false"` and deploy again.
 
 ## Rotate a secret
 

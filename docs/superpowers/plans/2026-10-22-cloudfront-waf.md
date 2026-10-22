@@ -358,6 +358,6 @@ UDM で 80 のフォワードを消すのは Task 16 なので、それまでに
 ### Task 18: Block に切り替える（段階 6）
 
 - [ ] **Step 1:** 段階 3 から 1〜2 週間後、WAF のログで Count のルールに当たったリクエストを洗い、本人の利用や連携に当たったルールを `RuleActionOverrides` で Count に残すか、scope-down で外す。テストを足して `infra/template.yaml` を直す。
-- [ ] **Step 2:** `BlockManagedRules` の Default を `"true"` にして commit し、所有者の確認を取ってから `scripts/deploy.sh` を実行する。設計書の確認項目を、もう一度通す。
+- [ ] **Step 2:** `infra/parameters.json` の `BlockManagedRules` を `"true"` にし、`infra/template.yaml` の Default もそろえて commit する。`aws cloudformation deploy` は渡されないパラメータの前の値を使い続けるので、Default を変えるだけではスタックに届かない。所有者の確認を取ってから `scripts/deploy.sh` を実行する。設計書の確認項目を、もう一度通す。
 - [ ] **Step 3:** security-agent の自宅サービス向けのオンデマンドのペンテストを、所有者の確認を取ってから回し、WAF に止められずに最後まで走ることを確かめる。
-- 戻し方: `BlockManagedRules` を `"false"` に戻してデプロイする。
+- 戻し方: `infra/parameters.json` とテンプレートの Default の `BlockManagedRules` を `"false"` に戻してデプロイする。
