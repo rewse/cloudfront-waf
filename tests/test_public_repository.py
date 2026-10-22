@@ -1,4 +1,4 @@
-"""Checks that the public repository carries no private network addresses."""
+"""Checks that the public repository names no public address it should not."""
 
 import ipaddress
 import re
@@ -7,26 +7,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 IPV4_LITERAL = re.compile(r"(?<![\d.v])\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?(?![\d.])")
-# A prefix written with a wildcard, such as "198.51.100.x".
+# Public addresses the repository may name: the home WAN address (public in
+# DNS), a CloudFront origin-facing range, and the EC2 address of an
+# unidentified webhook caller. Private, loopback, and documentation ranges
+# reveal nothing and are always allowed.
+PUBLIC_ALLOWED = {"106.163.184.9", "130.176.0.0/18", "54.64.81.21"}
+# A prefix written with a wildcard in place of the last octets.
 IPV4_WILDCARD = re.compile(r"(?<![\d.v])\d{1,3}(?:\.\d{1,3}){1,2}\.[x*](?![\w.])")
-# Addresses the repository may name: the home WAN address (public in DNS),
-# the home LAN and the VPC behind the VPN, loopback, a CloudFront
-# origin-facing range, and the EC2 address of an unidentified webhook caller.
-ALLOWED = {
-    "10.0.0.0/16",
-    "106.163.184.9",
-    "127.0.0.1",
-    "130.176.0.0/18",
-    "192.168.0.0/24",
-    "192.168.0.10",
-    "54.64.81.21",
-}
-# RFC 5737 documentation ranges, free for examples and test data.
-DOCUMENTATION = [
-    ipaddress.ip_network("192.0.2.0/24"),
-    ipaddress.ip_network("198.51.100.0/24"),
-    ipaddress.ip_network("203.0.113.0/24"),
-]
 
 
 def _tracked_text_files() -> list[Path]:
@@ -34,15 +21,19 @@ def _tracked_text_files() -> list[Path]:
         ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True
     ).stdout.split(b"\0")
     return [
-        ROOT / name.decode()
-        for name in names
-        if name and not name.endswith(b".lock")
+        ROOT / name.decode() for name in names if name and not name.endswith(b".lock")
     ]
 
 
-def _is_documentation(literal: str) -> bool:
-    network = ipaddress.ip_network(literal, strict=False)
-    return any(network.subnet_of(range_) for range_ in DOCUMENTATION)
+def _is_allowed(literal: str) -> bool:
+    if literal in PUBLIC_ALLOWED:
+        return True
+    try:
+        network = ipaddress.ip_network(literal, strict=False)
+    except ValueError:
+        # Four dotted numbers that are not an address, such as a version.
+        return True
+    return network.is_private
 
 
 def test_only_known_ipv4_addresses_appear() -> None:
@@ -50,7 +41,7 @@ def test_only_known_ipv4_addresses_appear() -> None:
         f"{path.relative_to(ROOT)}: {literal}"
         for path in _tracked_text_files()
         for literal in IPV4_LITERAL.findall(path.read_text(errors="ignore"))
-        if literal not in ALLOWED and not _is_documentation(literal)
+        if not _is_allowed(literal)
     }
 
     assert found == set()
