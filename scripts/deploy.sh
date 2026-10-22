@@ -17,12 +17,30 @@ origin_verify="$(op read -n "${OP_ORIGIN_VERIFY_REF}")"
 pentest_header="$(op read -n "${OP_PENTEST_HEADER_REF}")"
 office_cidrs="$(op read -n "${OP_OFFICE_CIDRS_REF}")"
 
+if [[ ! "${office_cidrs}" =~ ^[0-9a-fA-F:.]+/[0-9]+(,[0-9a-fA-F:.]+/[0-9]+)*$ ]]; then
+  echo "error: the office CIDR value is not a comma-separated CIDR list" >&2
+  exit 1
+fi
+
+# Keep secret values out of argv: pass the overrides as a JSON file.
+overrides="$(mktemp)"
+trap 'rm -f "${overrides}"' EXIT
+chmod 600 "${overrides}"
+ORIGIN_VERIFY="${origin_verify}" PENTEST_HEADER="${pentest_header}" \
+  OFFICE_CIDRS="${office_cidrs}" python3 -I -c '
+import json
+import os
+
+print(json.dumps([
+    "OriginVerifyHeaderValue=" + os.environ["ORIGIN_VERIFY"],
+    "PentestHeaderValue=" + os.environ["PENTEST_HEADER"],
+    "OfficeCidrs=" + os.environ["OFFICE_CIDRS"],
+]))
+' > "${overrides}"
+
 aws cloudformation deploy \
   --region "${REGION}" \
   --stack-name "${STACK_NAME}" \
   --template-file infra/template.yaml \
   --no-fail-on-empty-changeset \
-  --parameter-overrides \
-  "OriginVerifyHeaderValue=${origin_verify}" \
-  "PentestHeaderValue=${pentest_header}" \
-  "OfficeCidrs=${office_cidrs}"
+  --parameter-overrides "file://${overrides}"

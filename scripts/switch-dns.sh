@@ -28,6 +28,13 @@ esac
 [[ $# -le 2 ]] || usage
 [[ "${mode}" == "cloudfront" || "${mode}" == "origin" ]] || usage
 
+require_distribution_domain() {
+  if [[ -z "$1" || "$1" == "None" || "$1" != *.cloudfront.net ]]; then
+    echo "error: invalid CloudFront domain name: '$1'" >&2
+    exit 1
+  fi
+}
+
 distribution="${DISTRIBUTION:-}"
 if [[ "${mode}" == "cloudfront" && -z "${distribution}" ]]; then
   if "${dry_run}"; then
@@ -38,6 +45,9 @@ if [[ "${mode}" == "cloudfront" && -z "${distribution}" ]]; then
       --query "Stacks[0].Outputs[?OutputKey=='DistributionDomainName'].OutputValue" \
       --output text)"
   fi
+fi
+if [[ "${mode}" == "cloudfront" && "${distribution}" != "<DistributionDomainName>" ]]; then
+  require_distribution_domain "${distribution}"
 fi
 
 build_batch() {

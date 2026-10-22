@@ -97,3 +97,44 @@ def test_blog_and_rds_names_are_never_touched() -> None:
             name = change["ResourceRecordSet"]["Name"]
             assert not name.startswith(forbidden)
             assert "-db." not in name
+
+
+def _run_with_stub_aws(
+    tmp_path: Path, distribution: str | None
+) -> tuple[subprocess.CompletedProcess[str], str]:
+    calls = tmp_path / "calls.txt"
+    stub = tmp_path / "bin" / "aws"
+    stub.parent.mkdir()
+    stub.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = cloudformation ]; then echo None; exit 0; fi\n'
+        f'echo "$*" >> "{calls}"\n'
+    )
+    stub.chmod(0o755)
+    env = {**os.environ, "PATH": f"{stub.parent}:{os.environ['PATH']}"}
+    env.pop("DISTRIBUTION", None)
+    if distribution is not None:
+        env["DISTRIBUTION"] = distribution
+    result = subprocess.run(
+        [str(SCRIPT), "cloudfront"],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    return result, calls.read_text() if calls.exists() else ""
+
+
+def test_missing_stack_output_is_rejected_before_any_change(tmp_path: Path) -> None:
+    result, calls = _run_with_stub_aws(tmp_path, None)
+
+    assert result.returncode != 0
+    assert "invalid CloudFront domain" in result.stderr
+    assert "change-resource-record-sets" not in calls
+
+
+def test_non_cloudfront_distribution_is_rejected(tmp_path: Path) -> None:
+    result, calls = _run_with_stub_aws(tmp_path, "evil.example.com")
+
+    assert result.returncode != 0
+    assert "change-resource-record-sets" not in calls
