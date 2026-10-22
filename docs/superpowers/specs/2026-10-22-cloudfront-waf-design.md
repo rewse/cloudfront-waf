@@ -41,6 +41,7 @@ fox（自宅の Raspberry Pi）で動くサービスは、UDM の WAN ポート�
 
 - `blog.rewse.jp`。Amplify のアプリ `rewse-blog` で配信していて、Amplify が作った Web ACL（IP reputation、Core rule set、Known Bad Inputs）がすでに付いている。
 - 家の中から fox への経路。今まで通り直接つなぐ。
+- 公開ゾーンにある RDS のエンドポイントへの CNAME と、RDS 自体の公開設定（所有者の判断）。
 - ブログ記事などの対外発信（所有者の判断）。
 - Shield Advanced、Account Takeover Prevention、viewer mTLS、CloudFront のフラットレート料金プラン。どれもこの環境には合わないと判断した（こちらの判断）。ATP については、HA のログインが独自の JSON フローで、fail2ban がすでに効いているため。viewer mTLS は、HA アプリや Tesla の通信が通らなくなるおそれがあるため。フラットレートプランは、従量課金で困ることがなく、ルールの自由度が下がるおそれがあるため。
 
@@ -144,7 +145,7 @@ CloudWatch のメトリクスを Zabbix に取り込む。alfa の `zabbix_aws`�
 
 ## 確認項目
 
-切り替え後、少なくとも次を確かめる。
+切り替え後、少なくとも次を確かめる。ブラウザでの確認は `browser-automation` スキルに従う（所有者の判断）。
 
 - 10 個の名前すべてで、ブラウザからログインして使える。
 - HA の iOS アプリが、家の外のモバイル回線、社内ネットワーク、Webhook、WebSocket で動く。
@@ -165,7 +166,6 @@ CloudWatch のメトリクスを Zabbix に取り込む。alfa の `zabbix_aws`�
 ## 未解決
 
 - `54.64.81.21` から HA の Webhook を叩いているものの正体。CloudFront 経由になれば WAF ログにリクエストの詳細が残るので、そこから追う。
-- 範囲の外で見つけたもの。fox の `/etc/apache2/conf-enabled/nextcloud.conf` が、リンク先のないシンボリックリンクとして残っている。Amplify が作った Web ACL のうち、`d1g9n4274gdgdc` のものがどのリソースにも関連付いていない。RDS のエンドポイントへの CNAME が公開ゾーンにある。
 
 ## 作り手に任せること
 
