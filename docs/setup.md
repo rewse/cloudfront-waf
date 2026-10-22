@@ -62,12 +62,13 @@ ansible-playbook -i inventory home-secondary.yml -l hotel.rewse.jp \
 
 The `httpd` tag installs `mod_remoteip` and the log formats that record the restored client address, exempts the CloudFront origin-facing ranges from every fail2ban jail, installs the action that makes Apache deny banned addresses, and adds the drift check described under "Watch for new CloudFront ranges". Apache does not check the secret header yet. `filebrowser_apache` and `teslamate_apache` update the `nas` and `grafana` vhosts, which forward or log the client address themselves. The `*_fail2ban` tags give each HTTP jail the Apache ban action next to its firewall action. On hotel, `homeassistant_ha_secondary_failover` installs the `homeassistant-name-switch` that moves only the 443 forward, which has to be in place before stage 5 removes the 80 forward.
 
-Before stage 3, send a few requests through CloudFront without changing DNS, for example `curl -sI --resolve hass.rewse.jp:443:<CloudFront IP> https://hass.rewse.jp/`. Then check on fox that no CloudFront origin-facing address appears as the client in the Apache logs that fail2ban reads:
+Before stage 3, send a few requests through CloudFront without changing DNS, for example `curl -sI --resolve hass.rewse.jp:443:<CloudFront IP> https://hass.rewse.jp/`. Then check on fox and hotel that no CloudFront origin-facing address appears as the client in the Apache logs that fail2ban reads:
 
 ```sh
 sudo python3 - <<'EOF'
 import ipaddress
 import json
+import os
 import urllib.request
 
 with urllib.request.urlopen("https://ip-ranges.amazonaws.com/ip-ranges.json") as response:
@@ -83,6 +84,8 @@ logs = {
     "/var/log/apache2/other_vhosts_access.log": 1,
 }
 for path, field in logs.items():
+    if not os.path.exists(path):
+        continue
     with open(path, errors="replace") as log:
         for line in log:
             try:
@@ -183,18 +186,13 @@ The `httpd` role installs the Zabbix agent key `apache.remoteip.missing_prefixes
 The web ACL logs to the CloudWatch Logs group `aws-waf-logs-cloudfront-waf` in `us-east-1`, kept for 90 days. The `authorization` and `cookie` headers and the pentest header are redacted. In CloudWatch Logs Insights, select the group and a time range, then run:
 
 ```
-stats count(*) as requests by
-    terminatingRuleId,
-    ruleGroupList.0.ruleGroupId,
-    ruleGroupList.0.terminatingRule.ruleId,
-    ruleGroupList.0.nonTerminatingMatchingRules.0.ruleId,
-    nonTerminatingMatchingRules.0.ruleId,
-    httpRequest.clientIp,
-    httpRequest.uri
+parse @message /"ruleGroupId":"(?<group>[^"]+)","terminatingRule":[^\[]*"nonTerminatingMatchingRules":\[\{"ruleId":"(?<rule>[^"]+)"/
+| filter ispresent(rule)
+| stats count(*) as requests by group, rule
 | sort requests desc
-| limit 50
+| limit 25
 ```
 
-A managed rule group in count mode reports its matches under `ruleGroupList[].nonTerminatingMatchingRules`, and once blocking is on the matching sub-rule appears under `ruleGroupList[].terminatingRule`. The top-level `nonTerminatingMatchingRules` contains only rules attached directly to the web ACL, such as the geo label. The query reads the first entry of each list, so a request that matched several rules shows only one of them.
+`ruleGroupList` holds every rule group the web ACL evaluated, in order, whether or not it matched, so the query parses the raw message for the first group whose `nonTerminatingMatchingRules` is not empty and reports that group and its first matching sub-rule. A request that matched in several groups is counted once, under the first. To see blocked requests instead, run `stats count(*) by terminatingRuleId, httpRequest.clientIp, httpRequest.uri` with `filter action = "BLOCK"`. Rules attached directly to the web ACL, such as the geo label, appear in the top-level `nonTerminatingMatchingRules`.
 
-After the first deployment, run the query against real log lines and adjust the field paths if the output has empty columns. When a sub-rule flags legitimate traffic, add a rule action override for it in `infra/template.yaml` before you turn on blocking.
+When a sub-rule flags legitimate traffic, add a rule action override for it in `infra/template.yaml` before you turn on blocking.
