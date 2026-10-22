@@ -1,0 +1,454 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  One CloudFront distribution and an AWS WAF web ACL in front of the home
+  services on the Raspberry Pi, reached at origin.rewse.jp. Deploy as stack
+  "cloudfront-waf" in us-east-1 with scripts/deploy.sh, which reads the
+  secret parameters from 1Password.
+
+Parameters:
+  OriginVerifyHeaderValue:
+    Type: String
+    NoEcho: true
+    MinLength: 1
+    Description: >-
+      Value of the X-Origin-Verify header that CloudFront adds to every origin
+      request. Apache rejects requests from outside the home network that lack it.
+  PentestHeaderValue:
+    Type: String
+    NoEcho: true
+    MinLength: 1
+    Description: >-
+      Value of the X-Security-Agent-Pentest header that lets the AWS Security
+      Agent pentest bypass the WAF.
+  OfficeCidrs:
+    Type: CommaDelimitedList
+    NoEcho: true
+    Description: Amazon corporate network egress CIDRs (IPv4), used only to label requests.
+  HomePublicIpv4:
+    Type: String
+    Default: 106.163.184.9
+    AllowedPattern: ^(\d{1,3}\.){3}\d{1,3}$
+    Description: >-
+      WAN IPv4 address of the home router. It is already public in DNS, so it
+      is not treated as a secret.
+  BlockManagedRules:
+    Type: String
+    AllowedValues:
+      - "true"
+      - "false"
+    Default: "false"
+    Description: >-
+      Set to "true" to let the managed rule groups that start in count mode
+      block requests, once their false positives have been tuned out.
+
+Conditions:
+  BlockManagedRuleGroups: !Equals
+    - !Ref BlockManagedRules
+    - "true"
+
+Resources:
+  # One certificate covers the apex and every subdomain on the distribution.
+  # CloudFront only accepts certificates from us-east-1, which is where this
+  # stack is deployed. The DNS validation record for rewse.jp also validates
+  # *.rewse.jp, so a single validation option is enough.
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: rewse.jp
+      SubjectAlternativeNames:
+        - "*.rewse.jp"
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: rewse.jp
+          HostedZoneId: Z34LVKL0P9KD74
+
+  # The origin name lets CloudFront connect over HTTPS with the existing
+  # *.rewse.jp certificate on Apache, and keeps working when the router
+  # forwards to the failover host. There is no AAAA record: the router only
+  # accepts CloudFront on IPv4 and closes 443 on IPv6.
+  OriginRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: Z34LVKL0P9KD74
+      Name: origin.rewse.jp.
+      Type: A
+      TTL: "300"
+      ResourceRecords:
+        - !Ref HomePublicIpv4
+
+  # The egress CIDRs come from a NoEcho parameter because the repository is
+  # public. The set only feeds the geo label; it never allows or blocks.
+  OfficeIpSet:
+    Type: AWS::WAFv2::IPSet
+    Properties:
+      Name: cloudfront-waf-office
+      Description: Amazon corporate network egress CIDRs.
+      Scope: CLOUDFRONT
+      IPAddressVersion: IPV4
+      Addresses: !Ref OfficeCidrs
+
+  # Rules run in priority order and the default is Allow. The reputation
+  # lists and the rate limits block from the first deployment; the other
+  # managed rule groups follow BlockManagedRules so they can run in count
+  # mode until the WAF logs show their false positives.
+  WebAcl:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: cloudfront-waf
+      Description: Protects the home services behind CloudFront.
+      Scope: CLOUDFRONT
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        CloudWatchMetricsEnabled: true
+        MetricName: cloudfront-waf
+        SampledRequestsEnabled: true
+      Rules:
+        # The pentest skips the WAF so that it measures the applications
+        # themselves. The header value is a secret, and the logs redact it.
+        - Name: AllowSecurityAgentPentest
+          Priority: 0
+          Action:
+            Allow: {}
+          Statement:
+            ByteMatchStatement:
+              FieldToMatch:
+                SingleHeader:
+                  Name: x-security-agent-pentest
+              PositionalConstraint: EXACTLY
+              SearchString: !Ref PentestHeaderValue
+              TextTransformations:
+                - Priority: 0
+                  Type: NONE
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: AllowSecurityAgentPentest
+            SampledRequestsEnabled: true
+        - Name: AWSManagedRulesAmazonIpReputationList
+          Priority: 1
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAmazonIpReputationList
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesAmazonIpReputationList
+            SampledRequestsEnabled: true
+        # HostingProviderIPList stays in count mode: legitimate callers run on
+        # EC2 and Lambda (an unidentified webhook caller, the Alexa backend,
+        # probably Tesla), and Alexa and Tesla call too rarely for a count
+        # period to reveal false positives.
+        - Name: AWSManagedRulesAnonymousIpList
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAnonymousIpList
+              RuleActionOverrides:
+                - Name: HostingProviderIPList
+                  ActionToUse:
+                    Count: {}
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesAnonymousIpList
+            SampledRequestsEnabled: true
+        # Sign-in paths of Home Assistant (/auth/), Grafana and filebrowser
+        # (/login), and Frigate (/api/login). Two weeks of logs peaked at 11
+        # requests per 5 minutes from the owner's IP on these paths.
+        - Name: RateLimitLogin
+          Priority: 3
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: 100
+              EvaluationWindowSec: 300
+              AggregateKeyType: IP
+              ScopeDownStatement:
+                OrStatement:
+                  Statements:
+                    - ByteMatchStatement:
+                        FieldToMatch:
+                          UriPath: {}
+                        PositionalConstraint: STARTS_WITH
+                        SearchString: /auth/
+                        TextTransformations:
+                          - Priority: 0
+                            Type: LOWERCASE
+                    - ByteMatchStatement:
+                        FieldToMatch:
+                          UriPath: {}
+                        PositionalConstraint: STARTS_WITH
+                        SearchString: /login
+                        TextTransformations:
+                          - Priority: 0
+                            Type: LOWERCASE
+                    - ByteMatchStatement:
+                        FieldToMatch:
+                          UriPath: {}
+                        PositionalConstraint: STARTS_WITH
+                        SearchString: /api/login
+                        TextTransformations:
+                          - Priority: 0
+                            Type: LOWERCASE
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimitLogin
+            SampledRequestsEnabled: true
+        # Two weeks of logs peaked at 1,100 requests per 5 minutes from the
+        # owner's IP, so 3,000 leaves room for webhooks and long polling.
+        - Name: RateLimitAll
+          Priority: 4
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: 3000
+              EvaluationWindowSec: 300
+              AggregateKeyType: IP
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimitAll
+            SampledRequestsEnabled: true
+        - Name: AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 5
+          OverrideAction: !If
+            - BlockManagedRuleGroups
+            - None: {}
+            - Count: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesKnownBadInputsRuleSet
+            SampledRequestsEnabled: true
+        # SizeRestrictions_BODY stays in count mode even when the group
+        # blocks: Home Assistant webhooks, CouchDB, and nas uploads send
+        # bodies larger than its 8 KB limit.
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 6
+          OverrideAction: !If
+            - BlockManagedRuleGroups
+            - None: {}
+            - Count: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+              RuleActionOverrides:
+                - Name: SizeRestrictions_BODY
+                  ActionToUse:
+                    Count: {}
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesCommonRuleSet
+            SampledRequestsEnabled: true
+        - Name: AWSManagedRulesLinuxRuleSet
+          Priority: 7
+          OverrideAction: !If
+            - BlockManagedRuleGroups
+            - None: {}
+            - Count: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesLinuxRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesLinuxRuleSet
+            SampledRequestsEnabled: true
+        - Name: AWSManagedRulesUnixRuleSet
+          Priority: 8
+          OverrideAction: !If
+            - BlockManagedRuleGroups
+            - None: {}
+            - Count: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesUnixRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesUnixRuleSet
+            SampledRequestsEnabled: true
+        # The Zabbix web UI is written in PHP.
+        - Name: AWSManagedRulesPHPRuleSet
+          Priority: 9
+          OverrideAction: !If
+            - BlockManagedRuleGroups
+            - None: {}
+            - Count: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesPHPRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesPHPRuleSet
+            SampledRequestsEnabled: true
+        # The common inspection level labels self-identifying bots. The
+        # targeted level costs more and relies on browser challenges that the
+        # API clients of the home services cannot answer.
+        - Name: AWSManagedRulesBotControlRuleSet
+          Priority: 10
+          OverrideAction: !If
+            - BlockManagedRuleGroups
+            - None: {}
+            - Count: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesBotControlRuleSet
+              ManagedRuleGroupConfigs:
+                - AWSManagedRulesBotControlRuleSet:
+                    InspectionLevel: COMMON
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: AWSManagedRulesBotControlRuleSet
+            SampledRequestsEnabled: true
+        # The geo check only labels requests from outside Japan that do not
+        # come from the corporate network, so the logs can show them; it
+        # never blocks.
+        - Name: GeoLabel
+          Priority: 11
+          Action:
+            Count: {}
+          RuleLabels:
+            - Name: cloudfront-waf:outside-japan-and-office
+          Statement:
+            NotStatement:
+              Statement:
+                OrStatement:
+                  Statements:
+                    - GeoMatchStatement:
+                        CountryCodes:
+                          - JP
+                    - IPSetReferenceStatement:
+                        Arn: !GetAtt OfficeIpSet.Arn
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: GeoLabel
+            SampledRequestsEnabled: true
+
+  # WAF requires the aws-waf-logs- prefix on the log group name. Ninety days
+  # covers the count period used to tune the managed rules, with room to
+  # look back after switching them to block.
+  WafLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: aws-waf-logs-cloudfront-waf
+      RetentionInDays: 90
+
+  # The destination is the log group ARN without the trailing ":*" that
+  # GetAtt returns, which WAF rejects. The redacted headers carry the pentest
+  # secret and sign-in credentials.
+  WafLogging:
+    Type: AWS::WAFv2::LoggingConfiguration
+    DependsOn: WafLogGroup
+    Properties:
+      ResourceArn: !GetAtt WebAcl.Arn
+      LogDestinationConfigs:
+        - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:aws-waf-logs-cloudfront-waf
+      RedactedFields:
+        - SingleHeader:
+            Name: authorization
+        - SingleHeader:
+            Name: cookie
+        - SingleHeader:
+            Name: x-security-agent-pentest
+
+  # Caching is disabled and every viewer header, query string, and cookie
+  # goes to the origin, so Apache keeps routing by Host header as it does
+  # today. The 60-second origin timeouts are the maximum without a quota
+  # increase and keep WebSockets, CouchDB long polling, and large nas uploads
+  # alive. Compression stays off because CachingDisabled does not let
+  # CloudFront compress responses anyway.
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Home services on the Raspberry Pi
+        Aliases:
+          - couchdb.rewse.jp
+          - grafana.rewse.jp
+          - hass.rewse.jp
+          - litellm.rewse.jp
+          - nas.rewse.jp
+          - nvr.rewse.jp
+          - rewse.jp
+          - teslamate.rewse.jp
+          - www.rewse.jp
+          - zabbix.rewse.jp
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_All
+        WebACLId: !GetAtt WebAcl.Arn
+        ViewerCertificate:
+          AcmCertificateArn: !Ref Certificate
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        Origins:
+          - Id: origin
+            DomainName: origin.rewse.jp
+            CustomOriginConfig:
+              HTTPSPort: 443
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+              OriginReadTimeout: 60
+              OriginKeepaliveTimeout: 60
+            OriginCustomHeaders:
+              - HeaderName: X-Origin-Verify
+                HeaderValue: !Ref OriginVerifyHeaderValue
+        DefaultCacheBehavior:
+          TargetOriginId: origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - DELETE
+            - GET
+            - HEAD
+            - OPTIONS
+            - PATCH
+            - POST
+            - PUT
+          CachedMethods:
+            - GET
+            - HEAD
+          # Managed-CachingDisabled
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          # Managed-AllViewer
+          OriginRequestPolicyId: 216adef6-5c7f-47e4-b989-5492eafa07d3
+          Compress: false
+
+  # Additional metrics publish OriginLatency and the per-status error rates
+  # that Zabbix reads through GetMetricData.
+  MonitoringSubscription:
+    Type: AWS::CloudFront::MonitoringSubscription
+    Properties:
+      DistributionId: !Ref Distribution
+      MonitoringSubscription:
+        RealtimeMetricsSubscriptionConfig:
+          RealtimeMetricsSubscriptionStatus: Enabled
+
+Outputs:
+  DistributionId:
+    Value: !Ref Distribution
+  DistributionDomainName:
+    Description: Target of the public DNS records for the home names.
+    Value: !GetAtt Distribution.DomainName
+  WebAclArn:
+    Value: !GetAtt WebAcl.Arn
+  WebAclName:
+    # Ref on a web ACL returns "name|id|scope".
+    Value: !Select
+      - 0
+      - !Split
+        - "|"
+        - !Ref WebAcl
