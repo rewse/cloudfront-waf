@@ -1,5 +1,6 @@
 """Checks on infra/template.yaml against the design's fixed values."""
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +48,8 @@ COUNT_PHASE_RULE_GROUPS = [
     "AWSManagedRulesPHPRuleSet",
     "AWSManagedRulesUnixRuleSet",
 ]
+
+IPV4_LITERAL = re.compile(r"(?<![\d.v])\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?(?![\d.])")
 
 SECRET_PARAMETERS = ["OfficeCidrs", "OriginVerifyHeaderValue", "PentestHeaderValue"]
 
@@ -288,7 +291,9 @@ def test_office_cidrs_come_from_parameter(template: dict[str, Any]) -> None:
     ip_set = _only_resource(template, "AWS::WAFv2::IPSet")
 
     assert ip_set["Properties"]["Addresses"] == "OfficeCidrs"
-    assert "Addresses: !Ref OfficeCidrs" in TEMPLATE_PATH.read_text()
+    # The home WAN address is public in DNS; any other IPv4 literal would be
+    # an egress range that belongs in 1Password.
+    assert set(IPV4_LITERAL.findall(TEMPLATE_PATH.read_text())) == {"106.163.184.9"}
 
 
 def test_every_rule_emits_metrics_and_samples(template: dict[str, Any]) -> None:
