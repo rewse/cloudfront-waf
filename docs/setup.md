@@ -2,11 +2,11 @@
 
 This runbook deploys the stack `cloudfront-waf` in Region `us-east-1`, moves the ten public names of `rewse.jp` onto it, and covers routine operations afterward. The stack creates one CloudFront distribution, an AWS WAF web ACL, the ACM certificate, the WAF log group, and the record `origin.rewse.jp`. The Apache and UDM changes are in `rewse/ansible-playbooks`.
 
-The default AWS profile is ReadOnly. Commands that write to AWS need the Admin profile, so they carry the `AWS_PROFILE=admin` prefix.
+The default AWS profile is ReadOnly. Commands that write to AWS need the Admin profile, so they start with `AWS_PROFILE=admin`.
 
 ## Prerequisites
 
-You need the AWS CLI, `uv`, and the 1Password CLI (`op`) signed in. The deploy reads three items from the 1Password vault `ansible`, referenced by item ID. Nothing in this repository holds their values.
+You need the AWS CLI, `uv`, and the 1Password CLI (`op`) signed in. The deploy reads three items from the 1Password vault `ansible`, referenced by item ID. Nothing in this repository contains their values.
 
 | Item | ID | Field | Used for |
 | --- | --- | --- | --- |
@@ -39,7 +39,7 @@ AWS_PROFILE=admin scripts/switch-dns.sh cloudfront
 AWS_PROFILE=admin scripts/switch-dns.sh origin
 ```
 
-`cloudfront` points the subdomains at the distribution with CNAME records and the apex with alias A and AAAA records. `origin` points the subdomains back at `fox.rewse.jp` (and `www` at `rewse.jp`) and sets the apex A and AAAA to the home addresses. `--dry-run` prints the change batch and changes nothing. The CNAME and apex origin records have a 300 second TTL, so a switch takes up to five minutes to reach every resolver. Alias records carry no TTL of their own.
+`cloudfront` points the subdomains at the distribution with CNAME records and the apex with alias A and AAAA records. `origin` points the subdomains back at `fox.rewse.jp` (and `www` at `rewse.jp`) and sets the apex A and AAAA to the home addresses. `--dry-run` prints the change batch and changes nothing. The CNAME and apex origin records have a 300 second TTL, so a switch takes up to five minutes to reach every resolver. Alias records have no TTL.
 
 ## Cutover order
 
@@ -87,6 +87,6 @@ stats count(*) as requests by
 | limit 50
 ```
 
-A managed rule group in count mode reports its matches under `ruleGroupList[].nonTerminatingMatchingRules`, and once blocking is on the matching sub-rule appears under `ruleGroupList[].terminatingRule`. The top-level `nonTerminatingMatchingRules` holds only rules attached directly to the web ACL, such as the geo label. The query reads the first entry of each list, so a request that matched several rules shows only one of them.
+A managed rule group in count mode reports its matches under `ruleGroupList[].nonTerminatingMatchingRules`, and once blocking is on the matching sub-rule appears under `ruleGroupList[].terminatingRule`. The top-level `nonTerminatingMatchingRules` contains only rules attached directly to the web ACL, such as the geo label. The query reads the first entry of each list, so a request that matched several rules shows only one of them.
 
 After the first deployment, run the query against real log lines and adjust the field paths if the output has empty columns. When a sub-rule flags legitimate traffic, add a rule action override for it in `infra/template.yaml` before you turn on blocking.
