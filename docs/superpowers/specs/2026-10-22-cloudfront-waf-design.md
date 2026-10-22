@@ -70,13 +70,13 @@ flowchart LR
 
 ### 置き場所
 
-- AWS 側（CloudFront、WAF、ACM 証明書、WAF ログの出力先、Route 53 の公開レコード）は、`rewse/cloudfront-waf` の CloudFormation で us-east-1 に置く。デプロイは security-agent と同じく `aws cloudformation deploy` で行う。CloudFront 用の WAF は us-east-1 にしか作れない。
+- AWS 側（CloudFront、WAF、ACM 証明書、WAF ログの出力先、`origin.rewse.jp` のレコード）は、`rewse/cloudfront-waf` の CloudFormation で us-east-1 に置く。10 個の公開名のレコードは、同じリポジトリのスクリプトが UPSERT で切り替える。既存のレコードは手で作られていて `AWS::Route53::RecordSet` にインポートできず、作り直すと最大 900 秒の NXDOMAIN が残るため（こちらの判断）。デプロイは security-agent と同じく `aws cloudformation deploy` で行う。CloudFront 用の WAF は us-east-1 にしか作れない。
 - 自宅側（Apache、UDM）は ansible-playbooks のロールに入れる。`httpd` に `mod_remoteip` と秘密ヘッダーの検証を足し、`udm` に WAN のファイアウォールを足す。ansible-playbooks の AGENTS.md の規約に従う。
 - Zabbix の設定は Zabbix を直接編集する（所有者の判断）。
 
 ### 秘密の値
 
-1Password を正とする（所有者の判断）。security-agent と同じく、1Password の `ansible` vault に置き、AWS 側には `op read ... | aws secretsmanager ...` で写し、CloudFormation からは参照で読む。Ansible は `lookup('pipe', 'op read op://ansible/...')` で 1Password から直接読む。対象は次の 3 つ。
+1Password を正とする（所有者の判断）。値は 1Password の `ansible` vault に置き、CloudFormation にはデプロイスクリプトが `op read` で読んだ値を NoEcho のパラメータとして渡す。security-agent のように Secrets Manager へ写す方法もあるが、実行時に値を読む AWS のサービスがないので、写しを持たない（こちらの判断）。Ansible は `lookup('pipe', 'op read op://ansible/...')` で 1Password から直接読む。対象は次の 3 つ。
 
 - オリジン検証用の秘密ヘッダーの値（新規）。
 - ペンテストの `X-Security-Agent-Pentest` の値（既存の項目をそのまま使う）。
