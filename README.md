@@ -117,3 +117,7 @@ The Zabbix item `apache.remoteip.missing_prefixes` on fox and hotel counts the o
 ## Development
 
 See [AGENTS.md](AGENTS.md) for the validation commands and the rules for secrets.
+
+## License
+
+[MIT](LICENSE)
