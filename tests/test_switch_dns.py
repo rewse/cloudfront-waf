@@ -138,3 +138,30 @@ def test_non_cloudfront_distribution_is_rejected(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "change-resource-record-sets" not in calls
+
+
+def test_placeholder_is_rejected_outside_a_dry_run(tmp_path: Path) -> None:
+    result, calls = _run_with_stub_aws(tmp_path, "<DistributionDomainName>")
+
+    assert result.returncode != 0
+    assert "invalid CloudFront domain" in result.stderr
+    assert "change-resource-record-sets" not in calls
+
+
+def test_dry_run_without_a_distribution_prints_the_placeholder() -> None:
+    env = {k: v for k, v in os.environ.items() if k != "DISTRIBUTION"}
+    result = subprocess.run(
+        [str(SCRIPT), "cloudfront", "--dry-run"],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    values = {
+        record["Value"]
+        for change in json.loads(result.stdout)["Changes"]
+        for record in change["ResourceRecordSet"].get("ResourceRecords", [])
+    }
+    assert values == {"<DistributionDomainName>"}

@@ -36,9 +36,13 @@ require_distribution_domain() {
 }
 
 distribution="${DISTRIBUTION:-}"
+# A dry run without $DISTRIBUTION prints a placeholder instead of reading the
+# stack. Only that case skips the domain check below.
+placeholder=false
 if [[ "${mode}" == "cloudfront" && -z "${distribution}" ]]; then
   if "${dry_run}"; then
     distribution="<DistributionDomainName>"
+    placeholder=true
   else
     distribution="$(aws cloudformation describe-stacks \
       --region "${REGION}" --stack-name "${STACK_NAME}" \
@@ -46,7 +50,7 @@ if [[ "${mode}" == "cloudfront" && -z "${distribution}" ]]; then
       --output text)"
   fi
 fi
-if [[ "${mode}" == "cloudfront" && "${distribution}" != "<DistributionDomainName>" ]]; then
+if [[ "${mode}" == "cloudfront" ]] && ! "${placeholder}"; then
   require_distribution_domain "${distribution}"
 fi
 
