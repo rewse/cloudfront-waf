@@ -21,6 +21,7 @@ NAMES = {
     "teslamate.rewse.jp",
     "www.rewse.jp",
     "zabbix.rewse.jp",
+    "zabbix-mcp.rewse.jp",
 }
 
 RULE_ORDER = [

@@ -67,7 +67,7 @@ HOME_IPV4 = "106.163.184.9"
 HOME_IPV6 = "240f:143:f60c:1:2ecf:67ff:fe0f:f65d"
 HOME_HOST = "fox.rewse.jp"
 SUBDOMAINS = ["couchdb", "grafana", "hass", "litellm", "nas", "nvr",
-              "teslamate", "www", "zabbix"]
+              "teslamate", "www", "zabbix", "zabbix-mcp"]
 
 
 def upsert(record_set):

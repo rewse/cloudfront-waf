@@ -6,7 +6,7 @@ This repository puts Amazon CloudFront and AWS WAF in front of the services that
 
 ```mermaid
 flowchart LR
-  client[Client] -->|"rewse.jp and 9 subdomains"| cf["CloudFront<br/>+ AWS WAF"]
+  client[Client] -->|"rewse.jp and 10 subdomains"| cf["CloudFront<br/>+ AWS WAF"]
   cf -->|"origin.rewse.jp:443<br/>X-Origin-Verify"| udm["UDM<br/>443 from CloudFront only"]
   udm --> apache["Apache on fox<br/>(hotel on failover)"]
   apache --> apps[Home services]
@@ -15,7 +15,7 @@ flowchart LR
   cw[CloudWatch metrics] -.-> zabbix[Zabbix]
 ```
 
-The public names are `rewse.jp` and `couchdb`, `grafana`, `hass`, `litellm`, `nas`, `nvr`, `teslamate`, `www`, and `zabbix` under it. In the public zone, each one points at the distribution. The distribution has one origin, `origin.rewse.jp`, which resolves to the home WAN address. It does no caching and forwards every viewer header, so Apache behaves as it did before CloudFront was in front of it. The origin read timeout is 60 seconds.
+The public names are `rewse.jp` and `couchdb`, `grafana`, `hass`, `litellm`, `nas`, `nvr`, `teslamate`, `www`, `zabbix`, and `zabbix-mcp` under it. In the public zone, each one points at the distribution. The distribution has one origin, `origin.rewse.jp`, which resolves to the home WAN address. It does no caching and forwards every viewer header, so Apache behaves as it did before CloudFront was in front of it. The origin read timeout is 60 seconds.
 
 Inside the home network and from the VPC behind the VPN, the same names resolve to fox's private address, so those clients do not pass through CloudFront.
 
@@ -67,13 +67,13 @@ When a sub-rule flags legitimate traffic, add a rule action override for it in `
 
 ## Turn on blocking
 
-`BlockManagedRules` is `"false"` in `infra/parameters.json`. Set it to `"true"` once the count period shows no false positives. The IP reputation list, the Anonymous IP list, and the other managed groups then block. The sub-rules listed under [WAF rules](#waf-rules) keep counting either way, through the rule action overrides in `infra/template.yaml`.
+`BlockManagedRules` is `"false"` in `infra/parameters.json`. Set it to `"true"` once the count period shows no false positives. The IP reputation list, the Anonymous IP list, and the other managed groups then block. The sub-rules listed under [WAF rules](#waf-rules) keep counting either way, through the rule action overrides in `infra/template.yaml`. Include the MCP calls to `zabbix-mcp.rewse.jp` in that check: they come from an HTTP library with a bearer token rather than from a browser, so a managed rule that flags them would cut the office off from the MCP server.
 
 `aws cloudformation deploy` keeps the previous value of a parameter it is not given, so changing a template `Default` alone never reaches the stack. Change the value in `infra/parameters.json` and the matching `Default` in `infra/template.yaml` (the tests check that the two agree). Commit both, and run `AWS_PROFILE=admin scripts/deploy.sh`. To go back, set both to `"false"` and deploy again.
 
 ## Rotate a secret
 
-The egress CIDRs change in 1Password and take effect on the next deploy. After changing them, also apply the `httpd_conf` tag to fox and hotel and the `zabbix_server_frontend` tag to fox. Apache renders the same list into the `/admin`, `/server-status`, and `/zabbix` allowlists.
+The egress CIDRs change in 1Password and take effect on the next deploy. After changing them, also apply the `httpd_conf` tag to fox and hotel, and the `zabbix_server_frontend` and `zabbix_mcp_apache` tags to fox. Apache renders the same list into the `/admin`, `/server-status`, and `/zabbix` allowlists and the `zabbix-mcp.rewse.jp` vhost.
 
 The pentest header has three copies besides 1Password: the WAF allow rule in this stack, `security-agent-pentest.conf` in Apache (fail2ban never bans an address that sent the header), and the Secrets Manager secret `security-agent/pentest-header` that `rewse/security-agent` sends with each pentest. After changing the password in 1Password, update all three:
 

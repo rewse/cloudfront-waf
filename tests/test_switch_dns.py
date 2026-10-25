@@ -16,6 +16,7 @@ SUBDOMAINS = [
     "nvr",
     "teslamate",
     "zabbix",
+    "zabbix-mcp",
 ]
 ZONE_NAMES = {f"{name}.rewse.jp." for name in SUBDOMAINS} | {"www.rewse.jp."}
 
@@ -45,7 +46,7 @@ def _record_sets(mode: str) -> dict[tuple[str, str], dict[str, Any]]:
 def test_cloudfront_batch_points_every_name_at_the_distribution() -> None:
     changes = _changes("cloudfront")
 
-    assert len(changes) == 11
+    assert len(changes) == 12
     assert {c["Action"] for c in changes} == {"UPSERT"}
     records = _record_sets("cloudfront")
     for name in ZONE_NAMES:
@@ -63,7 +64,7 @@ def test_cloudfront_batch_points_every_name_at_the_distribution() -> None:
 def test_origin_batch_restores_todays_records() -> None:
     changes = _changes("origin")
 
-    assert len(changes) == 11
+    assert len(changes) == 12
     assert {c["Action"] for c in changes} == {"UPSERT"}
     records = _record_sets("origin")
     for name in SUBDOMAINS:

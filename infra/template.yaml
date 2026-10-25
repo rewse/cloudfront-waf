@@ -407,6 +407,7 @@ Resources:
           - teslamate.rewse.jp
           - www.rewse.jp
           - zabbix.rewse.jp
+          - zabbix-mcp.rewse.jp
         HttpVersion: http2and3
         IPV6Enabled: true
         PriceClass: PriceClass_All
