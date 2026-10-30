@@ -6,7 +6,7 @@ This repository puts Amazon CloudFront and AWS WAF in front of the services that
 
 ```mermaid
 flowchart LR
-  client[Client] -->|"rewse.jp and 10 subdomains"| cf["CloudFront<br/>+ AWS WAF"]
+  client[Client] -->|"rewse.jp and 11 subdomains"| cf["CloudFront<br/>+ AWS WAF"]
   cf -->|"origin.rewse.jp:443<br/>X-Origin-Verify"| udm["UDM<br/>443 from CloudFront only"]
   udm --> apache["Apache on fox<br/>(hotel on failover)"]
   apache --> apps[Home services]
@@ -15,7 +15,7 @@ flowchart LR
   cw[CloudWatch metrics] -.-> zabbix[Zabbix]
 ```
 
-The public names are `rewse.jp` and `couchdb`, `grafana`, `hass`, `litellm`, `nas`, `nvr`, `teslamate`, `www`, `zabbix`, and `zabbix-mcp` under it. In the public zone, each one points at the distribution. The distribution has one origin, `origin.rewse.jp`, which resolves to the home WAN address. It does no caching and forwards every viewer header, so Apache behaves as it did before CloudFront was in front of it. The origin read timeout is 60 seconds.
+The public names are `rewse.jp` and `couchdb`, `expense`, `grafana`, `hass`, `litellm`, `nas`, `nvr`, `teslamate`, `www`, `zabbix`, and `zabbix-mcp` under it. In the public zone, each one points at the distribution. The distribution has one origin, `origin.rewse.jp`, which resolves to the home WAN address. It does no caching and forwards every viewer header, so Apache behaves as it did before CloudFront was in front of it. The origin read timeout is 60 seconds.
 
 Inside the home network and from the VPC behind the VPN, the same names resolve to fox's private address, so those clients do not pass through CloudFront.
 

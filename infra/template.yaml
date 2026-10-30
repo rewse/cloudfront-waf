@@ -398,6 +398,7 @@ Resources:
         Comment: Home services on the Raspberry Pi
         Aliases:
           - couchdb.rewse.jp
+          - expense.rewse.jp
           - grafana.rewse.jp
           - hass.rewse.jp
           - litellm.rewse.jp

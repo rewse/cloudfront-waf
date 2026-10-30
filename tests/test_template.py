@@ -12,6 +12,7 @@ TEMPLATE_PATH = Path(__file__).parent.parent / "infra" / "template.yaml"
 
 NAMES = {
     "couchdb.rewse.jp",
+    "expense.rewse.jp",
     "grafana.rewse.jp",
     "hass.rewse.jp",
     "litellm.rewse.jp",

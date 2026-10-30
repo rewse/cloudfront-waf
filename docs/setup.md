@@ -1,6 +1,6 @@
 # Setup
 
-This runbook deploys the stack `cloudfront-waf` in Region `us-east-1`, moves the eleven public names of `rewse.jp` onto it, and rolls the cutover back if needed. The stack creates one CloudFront distribution, an AWS WAF web ACL, the ACM certificate, the WAF log group, and the record `origin.rewse.jp`. The Apache and UDM changes are in `rewse/ansible-playbooks`. [README.md](../README.md) describes how the pieces fit together and the routine operations after the cutover.
+This runbook deploys the stack `cloudfront-waf` in Region `us-east-1`, moves the twelve public names of `rewse.jp` onto it, and rolls the cutover back if needed. The stack creates one CloudFront distribution, an AWS WAF web ACL, the ACM certificate, the WAF log group, and the record `origin.rewse.jp`. The Apache and UDM changes are in `rewse/ansible-playbooks`. [README.md](../README.md) describes how the pieces fit together and the routine operations after the cutover.
 
 The default AWS profile is ReadOnly. Commands that write to AWS need the Admin profile, so they start with `AWS_PROFILE=admin`.
 
@@ -29,9 +29,9 @@ Every managed rule group starts in count mode, so only the pentest allow rule an
 
 ## Switch DNS
 
-The eleven public names are `rewse.jp` and ten subdomains (`couchdb`, `grafana`, `hass`, `litellm`, `nas`, `nvr`, `teslamate`, `www`, `zabbix`, `zabbix-mcp`). The template cannot own their records: they were created by hand, and a manually created record cannot be imported into `AWS::Route53::RecordSet`. Recreating them through CloudFormation would leave resolvers with a cached NXDOMAIN for up to 900 seconds, the negative-caching time in the zone's SOA.
+The twelve public names are `rewse.jp` and eleven subdomains (`couchdb`, `expense`, `grafana`, `hass`, `litellm`, `nas`, `nvr`, `teslamate`, `www`, `zabbix`, `zabbix-mcp`). The template cannot own their records: they were created by hand, and a manually created record cannot be imported into `AWS::Route53::RecordSet`. Recreating them through CloudFormation would leave resolvers with a cached NXDOMAIN for up to 900 seconds, the negative-caching time in the zone's SOA.
 
-`scripts/switch-dns.sh` moves all eleven names in one atomic UPSERT batch. An UPSERT also creates a record the zone does not have yet, so the same command publishes a newly added name.
+`scripts/switch-dns.sh` moves all twelve names in one atomic UPSERT batch. An UPSERT also creates a record the zone does not have yet, so the same command publishes a newly added name.
 
 ```sh
 scripts/switch-dns.sh cloudfront --dry-run
