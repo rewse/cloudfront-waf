@@ -36,7 +36,7 @@ Parameters:
     AllowedValues:
       - "true"
       - "false"
-    Default: "false"
+    Default: "true"
     Description: >-
       Set to "true" to let the managed rule groups that start in count mode
       block requests, once their false positives have been tuned out.
@@ -304,11 +304,14 @@ Resources:
             SampledRequestsEnabled: true
         # The common inspection level labels self-identifying bots. The
         # targeted level costs more and relies on browser challenges that the
-        # API clients of the home services cannot answer. Two rules stay in
-        # count mode even when the group blocks, because they match those API
-        # clients: CategoryHttpLibrary (Home Assistant webhooks arrive from
-        # Go-http-client) and SignalNonBrowserUserAgent. Alexa and Tesla call
-        # too rarely for the count period to show their false positives.
+        # API clients of the home services cannot answer. Six rules stay in
+        # count mode even when the group blocks. CategoryHttpLibrary (Home
+        # Assistant webhooks arrive from Go-http-client) and
+        # SignalNonBrowserUserAgent match those API clients; Alexa and Tesla
+        # call too rarely for the count period to show their false positives.
+        # CategoryAI, CategoryContentFetcher, CategoryScrapingFramework, and
+        # CategorySocialMedia match the AI search, feed reader, Hatena, and
+        # link preview fetchers that rewse.jp is meant to serve.
         - Name: AWSManagedRulesBotControlRuleSet
           Priority: 10
           OverrideAction: !If
@@ -323,7 +326,19 @@ Resources:
                 - AWSManagedRulesBotControlRuleSet:
                     InspectionLevel: COMMON
               RuleActionOverrides:
+                - Name: CategoryAI
+                  ActionToUse:
+                    Count: {}
+                - Name: CategoryContentFetcher
+                  ActionToUse:
+                    Count: {}
                 - Name: CategoryHttpLibrary
+                  ActionToUse:
+                    Count: {}
+                - Name: CategoryScrapingFramework
+                  ActionToUse:
+                    Count: {}
+                - Name: CategorySocialMedia
                   ActionToUse:
                     Count: {}
                 - Name: SignalNonBrowserUserAgent

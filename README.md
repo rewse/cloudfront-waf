@@ -37,10 +37,10 @@ The web ACL evaluates the rules in this order. Rules marked *count* only label a
 | `RateLimitLogin` | Block more than 100 requests per IP in 5 minutes to `/auth/`, `/login`, or `/api/login` |
 | `RateLimitAll` | Block more than 3,000 requests per IP in 5 minutes |
 | Known bad inputs, core rule set, Linux, Unix, PHP | Block with `BlockManagedRules`, otherwise count. `SizeRestrictions_BODY` and `NoUserAgent_HEADER` always count |
-| Bot Control (common) | Block with `BlockManagedRules`, otherwise count. `CategoryHttpLibrary` and `SignalNonBrowserUserAgent` always count |
+| Bot Control (common) | Block with `BlockManagedRules`, otherwise count. `CategoryAI`, `CategoryContentFetcher`, `CategoryHttpLibrary`, `CategoryScrapingFramework`, `CategorySocialMedia`, and `SignalNonBrowserUserAgent` always count |
 | `GeoLabel` | Count and label requests from outside Japan that do not come from the Amazon corporate network |
 
-The sub-rules that always count match legitimate API callers: Home Assistant webhooks sent by Go-http-client, and Alexa and Tesla, which call too rarely for a count period to show them.
+Most of the sub-rules that always count match legitimate API callers: Home Assistant webhooks sent by Go-http-client, and Alexa and Tesla, which call too rarely for a count period to show them. The four Bot Control categories match fetchers that `rewse.jp` should keep serving: link previews from iMessage, Slack, and Discord, Hatena Bookmark, feed readers and Google Site Verification, and AI search crawlers.
 
 ## Monitoring
 
@@ -67,7 +67,7 @@ When a sub-rule flags legitimate traffic, add a rule action override for it in `
 
 ## Turn on blocking
 
-`BlockManagedRules` is `"false"` in `infra/parameters.json`. Set it to `"true"` once the count period shows no false positives. The IP reputation list, the Anonymous IP list, and the other managed groups then block. The sub-rules listed under [WAF rules](#waf-rules) keep counting either way, through the rule action overrides in `infra/template.yaml`. Include the MCP calls to `zabbix-mcp.rewse.jp` in that check: they come from an HTTP library with a bearer token rather than from a browser, so a managed rule that flags them would cut the office off from the MCP server.
+`BlockManagedRules` in `infra/parameters.json` decides whether the managed groups block. Keep it `"false"` until a count period shows no false positives, then set it to `"true"`. The IP reputation list, the Anonymous IP list, and the other managed groups then block. The sub-rules listed under [WAF rules](#waf-rules) keep counting either way, through the rule action overrides in `infra/template.yaml`. Include the MCP calls to `zabbix-mcp.rewse.jp` in that check: they come from an HTTP library with a bearer token rather than from a browser, so a managed rule that flags them would cut the office off from the MCP server.
 
 `aws cloudformation deploy` keeps the previous value of a parameter it is not given, so changing a template `Default` alone never reaches the stack. Change the value in `infra/parameters.json` and the matching `Default` in `infra/template.yaml` (the tests check that the two agree). Commit both, and run `AWS_PROFILE=admin scripts/deploy.sh`. To go back, set both to `"false"` and deploy again.
 
