@@ -304,14 +304,14 @@ Resources:
             SampledRequestsEnabled: true
         # The common inspection level labels self-identifying bots. The
         # targeted level costs more and relies on browser challenges that the
-        # API clients of the home services cannot answer. Six rules stay in
+        # API clients of the home services cannot answer. Four rules stay in
         # count mode even when the group blocks. CategoryHttpLibrary (Home
         # Assistant webhooks arrive from Go-http-client) and
         # SignalNonBrowserUserAgent match those API clients; Alexa and Tesla
         # call too rarely for the count period to show their false positives.
-        # CategoryAI, CategoryContentFetcher, CategoryScrapingFramework, and
-        # CategorySocialMedia match the AI search, feed reader, Hatena, and
-        # link preview fetchers that rewse.jp is meant to serve.
+        # CategoryScrapingFramework and CategorySocialMedia match Hatena and
+        # link preview fetchers following old rewse.jp/blog/ links, which
+        # redirect to blog.rewse.jp.
         - Name: AWSManagedRulesBotControlRuleSet
           Priority: 10
           OverrideAction: !If
@@ -326,12 +326,6 @@ Resources:
                 - AWSManagedRulesBotControlRuleSet:
                     InspectionLevel: COMMON
               RuleActionOverrides:
-                - Name: CategoryAI
-                  ActionToUse:
-                    Count: {}
-                - Name: CategoryContentFetcher
-                  ActionToUse:
-                    Count: {}
                 - Name: CategoryHttpLibrary
                   ActionToUse:
                     Count: {}

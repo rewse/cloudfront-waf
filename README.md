@@ -37,10 +37,10 @@ The web ACL evaluates the rules in this order. Rules marked *count* only label a
 | `RateLimitLogin` | Block more than 100 requests per IP in 5 minutes to `/auth/`, `/login`, or `/api/login` |
 | `RateLimitAll` | Block more than 3,000 requests per IP in 5 minutes |
 | Known bad inputs, core rule set, Linux, Unix, PHP | Block with `BlockManagedRules`, otherwise count. `SizeRestrictions_BODY` and `NoUserAgent_HEADER` always count |
-| Bot Control (common) | Block with `BlockManagedRules`, otherwise count. `CategoryAI`, `CategoryContentFetcher`, `CategoryHttpLibrary`, `CategoryScrapingFramework`, `CategorySocialMedia`, and `SignalNonBrowserUserAgent` always count |
+| Bot Control (common) | Block with `BlockManagedRules`, otherwise count. `CategoryHttpLibrary`, `CategoryScrapingFramework`, `CategorySocialMedia`, and `SignalNonBrowserUserAgent` always count |
 | `GeoLabel` | Count and label requests from outside Japan that do not come from the Amazon corporate network |
 
-Most of the sub-rules that always count match legitimate API callers: Home Assistant webhooks sent by Go-http-client, and Alexa and Tesla, which call too rarely for a count period to show them. The four Bot Control categories match fetchers that `rewse.jp` should keep serving: link previews from iMessage, Slack, and Discord, Hatena Bookmark, feed readers and Google Site Verification, and AI search crawlers.
+Most of the sub-rules that always count match legitimate API callers: Home Assistant webhooks sent by Go-http-client, and Alexa and Tesla, which call too rarely for a count period to show them. The two other Bot Control categories match link previews from iMessage, Slack, and Discord, and Hatena Bookmark, which fetch old `rewse.jp/blog/` links that redirect to `blog.rewse.jp`.
 
 ## Monitoring
 
