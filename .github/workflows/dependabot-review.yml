@@ -1,0 +1,33 @@
+name: Dependabot Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Review
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      issues: write
+      pull-requests: write
+      statuses: read
+    steps:
+      - name: Review the Dependabot PR
+        uses: rewse/actions/dependabot-review@27dd72c4d9cd7def26e267caba0e11ff87ec6f49  # v1.1.6
+        with:
+          app-client-id: ${{ secrets.DEPENDABOT_APP_CLIENT_ID }}
+          app-private-key: ${{ secrets.DEPENDABOT_APP_PRIVATE_KEY }}
+          kiro-api-key: ${{ secrets.KIRO_API_KEY }}
