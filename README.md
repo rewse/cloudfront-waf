@@ -69,7 +69,7 @@ When a sub-rule flags legitimate traffic, add a rule action override for it in `
 
 `BlockManagedRules` in `infra/parameters.json` decides whether the managed groups block. Keep it `"false"` until a count period shows no false positives, then set it to `"true"`. The IP reputation list, the Anonymous IP list, and the other managed groups then block. The sub-rules listed under [WAF rules](#waf-rules) keep counting either way, through the rule action overrides in `infra/template.yaml`. Include the MCP calls to `zabbix-mcp.rewse.jp` in that check: they come from an HTTP library with a bearer token rather than from a browser, so a managed rule that flags them would cut the office off from the MCP server.
 
-`aws cloudformation deploy` keeps the previous value of a parameter it is not given, so changing a template `Default` alone never reaches the stack. Change the value in `infra/parameters.json` and the matching `Default` in `infra/template.yaml` (the tests check that the two agree). Commit both, and run `AWS_PROFILE=admin scripts/deploy.sh`. To go back, set both to `"false"` and deploy again.
+`aws cloudformation deploy` keeps the previous value of a parameter it is not given, so changing a template `Default` alone never reaches the stack. Change the value in `infra/parameters.json` and the matching `Default` in `infra/template.yaml` (the tests check that the two agree). Commit both, and run `AWS_PROFILE=cloudfront-waf-deploy scripts/deploy.sh`. To go back, set both to `"false"` and deploy again.
 
 ## Rotate a secret
 
@@ -82,7 +82,7 @@ The pentest header has three copies besides 1Password: the WAF allow rule in thi
 3. Copy the value to Secrets Manager and trigger an update of `HomePentest`, as the last paragraph of step 10 in `docs/setup.md` of `rewse/security-agent` describes:
 
    ```sh
-   op read -n op://ansible/m6obpvalg7ekdi5nsf4yx6wi3q/password | AWS_PROFILE=admin aws secretsmanager put-secret-value \
+   op read -n op://ansible/m6obpvalg7ekdi5nsf4yx6wi3q/password | AWS_PROFILE=security-agent-deploy aws secretsmanager put-secret-value \
      --region us-east-1 --secret-id security-agent/pentest-header --secret-string file:///dev/stdin
    ```
 
@@ -106,6 +106,7 @@ The Zabbix item `apache.remoteip.missing_prefixes` on fox and hotel counts the o
 
 | Path | Contents |
 |---|---|
+| `infra/deploy-role.yaml` | The role `cloudfront-waf-deploy` that deploys the stack and switches DNS, in its own stack `cloudfront-waf-deploy-access` |
 | `infra/template.yaml` | The CloudFormation stack: distribution, web ACL, certificate, log group, and the `origin.rewse.jp` record |
 | `infra/parameters.json` | The parameters that are not secret, passed on every deploy |
 | `scripts/deploy.sh` | Deploys the stack with the secrets read from 1Password |

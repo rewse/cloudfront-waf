@@ -41,4 +41,4 @@ jobs:
         run: uvx --with pre-commit-uv==4.3.0 pre-commit@4.6.2 run --all-files --show-diff-on-failure
 
       - name: Run cfn-lint
-        run: uv run cfn-lint infra/template.yaml
+        run: uv run cfn-lint infra/deploy-role.yaml infra/template.yaml

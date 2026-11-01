@@ -1,0 +1,38 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Role that operators assume to deploy the cloudfront-waf stack and switch its
+  DNS records. Deploy as stack "cloudfront-waf-deploy-access" in us-east-1
+  with admin credentials.
+
+Resources:
+  # Permissions are granted per service at full-access granularity, covering
+  # every resource type in infra/template.yaml. The role has no IAM write
+  # access.
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: cloudfront-waf-deploy
+      Description: Deploys the cloudfront-waf stack and switches its DNS records.
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/Admin
+                - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:user/tats
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AWSCertificateManagerFullAccess
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AWSCloudFormationFullAccess
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AWSWAFFullAccess
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AmazonRoute53FullAccess
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/CloudFrontFullAccess
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/CloudWatchLogsFullAccess
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/ReadOnlyAccess
+
+Outputs:
+  DeployRoleArn:
+    Description: Role ARN for the cloudfront-waf-deploy AWS CLI profile.
+    Value: !GetAtt DeployRole.Arn

@@ -13,5 +13,5 @@ cloudfront-waf is a CloudFormation stack that puts CloudFront and AWS WAF in fro
 ## Validation
 
 - `uv run pytest -q`
-- `uv run cfn-lint infra/template.yaml`
+- `uv run cfn-lint infra/deploy-role.yaml infra/template.yaml`
 - `uvx --with pre-commit-uv==4.3.0 pre-commit@4.6.2 run --all-files`

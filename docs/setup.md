@@ -2,7 +2,14 @@
 
 This runbook deploys the stack `cloudfront-waf` in Region `us-east-1`, moves the twelve public names of `rewse.jp` onto it, and rolls the cutover back if needed. The stack creates one CloudFront distribution, an AWS WAF web ACL, the ACM certificate, the WAF log group, and the record `origin.rewse.jp`. The Apache and UDM changes are in `rewse/ansible-playbooks`. [README.md](../README.md) describes how the pieces fit together and the routine operations after the cutover.
 
-The default AWS profile is ReadOnly. Commands that write to AWS need the Admin profile, so they start with `AWS_PROFILE=admin`.
+The default AWS profile is read-only. Commands that write to AWS use the profile `cloudfront-waf-deploy`, which assumes the role of the same name, so they start with `AWS_PROFILE=cloudfront-waf-deploy`. The role comes from the stack `cloudfront-waf-deploy-access`, which `infra/deploy-role.yaml` defines; deploy it once with admin credentials:
+
+```sh
+AWS_PROFILE=admin aws cloudformation deploy --region us-east-1 \
+  --stack-name cloudfront-waf-deploy-access \
+  --template-file infra/deploy-role.yaml \
+  --capabilities CAPABILITY_NAMED_IAM
+```
 
 ## Prerequisites
 
@@ -20,7 +27,7 @@ The Ansible roles read the same items. If `op` asks for approval, approve it in 
 
 ```sh
 uv run cfn-lint infra/template.yaml
-AWS_PROFILE=admin scripts/deploy.sh
+AWS_PROFILE=cloudfront-waf-deploy scripts/deploy.sh
 ```
 
 `scripts/deploy.sh` reads the three items with `op read` and passes them to `aws cloudformation deploy` in a temporary JSON file, so they never appear in argv. The file is removed on exit. The same file carries every value in `infra/parameters.json`, the committed state of the parameters that are not secret (`BlockManagedRules` and `HomePublicIpv4`). The first deployment is slow because the certificate validates through DNS and the distribution has to propagate.
@@ -35,8 +42,8 @@ The twelve public names are `rewse.jp` and eleven subdomains (`couchdb`, `expens
 
 ```sh
 scripts/switch-dns.sh cloudfront --dry-run
-AWS_PROFILE=admin scripts/switch-dns.sh cloudfront
-AWS_PROFILE=admin scripts/switch-dns.sh origin
+AWS_PROFILE=cloudfront-waf-deploy scripts/switch-dns.sh cloudfront
+AWS_PROFILE=cloudfront-waf-deploy scripts/switch-dns.sh origin
 ```
 
 `cloudfront` points the subdomains at the distribution with CNAME records and the apex with alias A and AAAA records. `origin` points the subdomains back at `fox.rewse.jp` (and `www` at `rewse.jp`) and sets the apex A and AAAA to the home addresses. `--dry-run` prints the change batch and changes nothing. The CNAME and apex origin records have a 300 second TTL, so a switch takes up to five minutes to reach every resolver. Alias records have no TTL.
@@ -103,11 +110,11 @@ To undo stage 2, revert the role changes and run the same commands again.
 
 ### Stage 3: switch DNS
 
-Switch the public DNS with `AWS_PROFILE=admin scripts/switch-dns.sh cloudfront`, then run the checklist in the verification section of the design document, `docs/superpowers/specs/2026-10-22-cloudfront-waf-design.md` (written in Japanese).
+Switch the public DNS with `AWS_PROFILE=cloudfront-waf-deploy scripts/switch-dns.sh cloudfront`, then run the checklist in the verification section of the design document, `docs/superpowers/specs/2026-10-22-cloudfront-waf-design.md` (written in Japanese).
 
 While going through the checklist, watch CouchDB replication. A `_changes` long poll waits up to 60 seconds by default, as long as the origin read timeout, so a poll that runs the full minute can end in a 504 from CloudFront. Check the distribution's `504ErrorRate` metric in CloudWatch (`us-east-1`, `Region=Global`), because those 504s also count toward the Zabbix 5xx trigger. If CouchDB polls cause 504s, have the clients send a `heartbeat` shorter than 60 seconds, so the connection carries data before the timeout.
 
-To undo stage 3, run `AWS_PROFILE=admin scripts/switch-dns.sh origin`.
+To undo stage 3, run `AWS_PROFILE=cloudfront-waf-deploy scripts/switch-dns.sh origin`.
 
 ### Stage 4: enforce the origin header
 
