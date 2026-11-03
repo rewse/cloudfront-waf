@@ -162,8 +162,10 @@ Resources:
             MetricName: AWSManagedRulesAnonymousIpList
             SampledRequestsEnabled: true
         # Sign-in paths of Home Assistant (/auth/), Grafana and filebrowser
-        # (/login), and Frigate (/api/login). Two weeks of logs peaked at 11
-        # requests per 5 minutes from the owner's IP on these paths.
+        # (/login), Frigate (/api/login), and the Zabbix web UI, whose
+        # password and MFA steps post to /zabbix/index.php and
+        # /zabbix/index_mfa.php. Two weeks of logs peaked at 11 requests per
+        # 5 minutes from the owner's IP on the first three.
         - Name: RateLimitLogin
           Priority: 3
           Action:
@@ -200,14 +202,48 @@ Resources:
                         TextTransformations:
                           - Priority: 0
                             Type: LOWERCASE
+                    - ByteMatchStatement:
+                        FieldToMatch:
+                          UriPath: {}
+                        PositionalConstraint: STARTS_WITH
+                        SearchString: /zabbix/index
+                        TextTransformations:
+                          - Priority: 0
+                            Type: LOWERCASE
           VisibilityConfig:
             CloudWatchMetricsEnabled: true
             MetricName: RateLimitLogin
             SampledRequestsEnabled: true
+        # The Zabbix API, which IntelliTrend Mobile calls. The app peaked at 15
+        # requests per 10 minutes in fox's logs. The MCP server on fox calls
+        # the API without passing through CloudFront, so it does not count
+        # here.
+        - Name: RateLimitZabbixApi
+          Priority: 4
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: 300
+              EvaluationWindowSec: 300
+              AggregateKeyType: IP
+              ScopeDownStatement:
+                ByteMatchStatement:
+                  FieldToMatch:
+                    UriPath: {}
+                  PositionalConstraint: STARTS_WITH
+                  SearchString: /zabbix/api_jsonrpc.php
+                  TextTransformations:
+                    - Priority: 0
+                      Type: LOWERCASE
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimitZabbixApi
+            SampledRequestsEnabled: true
         # Two weeks of logs peaked at 1,100 requests per 5 minutes from the
         # owner's IP, so 3,000 leaves room for webhooks and long polling.
         - Name: RateLimitAll
-          Priority: 4
+          Priority: 5
           Action:
             Block: {}
           Statement:
@@ -220,7 +256,7 @@ Resources:
             MetricName: RateLimitAll
             SampledRequestsEnabled: true
         - Name: AWSManagedRulesKnownBadInputsRuleSet
-          Priority: 5
+          Priority: 6
           OverrideAction: !If
             - BlockManagedRuleGroups
             - None: {}
@@ -239,7 +275,7 @@ Resources:
         # API callers such as Alexa and Tesla call too rarely for the count
         # period to show whether they send a User-Agent.
         - Name: AWSManagedRulesCommonRuleSet
-          Priority: 6
+          Priority: 7
           OverrideAction: !If
             - BlockManagedRuleGroups
             - None: {}
@@ -260,7 +296,7 @@ Resources:
             MetricName: AWSManagedRulesCommonRuleSet
             SampledRequestsEnabled: true
         - Name: AWSManagedRulesLinuxRuleSet
-          Priority: 7
+          Priority: 8
           OverrideAction: !If
             - BlockManagedRuleGroups
             - None: {}
@@ -274,7 +310,7 @@ Resources:
             MetricName: AWSManagedRulesLinuxRuleSet
             SampledRequestsEnabled: true
         - Name: AWSManagedRulesUnixRuleSet
-          Priority: 8
+          Priority: 9
           OverrideAction: !If
             - BlockManagedRuleGroups
             - None: {}
@@ -289,7 +325,7 @@ Resources:
             SampledRequestsEnabled: true
         # The Zabbix web UI is written in PHP.
         - Name: AWSManagedRulesPHPRuleSet
-          Priority: 9
+          Priority: 10
           OverrideAction: !If
             - BlockManagedRuleGroups
             - None: {}
@@ -313,7 +349,7 @@ Resources:
         # link preview fetchers following old rewse.jp/blog/ links, which
         # redirect to blog.rewse.jp.
         - Name: AWSManagedRulesBotControlRuleSet
-          Priority: 10
+          Priority: 11
           OverrideAction: !If
             - BlockManagedRuleGroups
             - None: {}
@@ -346,7 +382,7 @@ Resources:
         # come from the corporate network, so the logs can show them; it
         # never blocks.
         - Name: GeoLabel
-          Priority: 11
+          Priority: 12
           Action:
             Count: {}
           RuleLabels:

@@ -34,7 +34,8 @@ The web ACL evaluates the rules in this order. Rules marked *count* only label a
 | `AllowSecurityAgentPentest` | Allow requests that carry the secret `X-Security-Agent-Pentest` header of [`rewse/security-agent`](https://github.com/rewse/security-agent) |
 | Amazon IP reputation list | Block with `BlockManagedRules`, otherwise count |
 | Anonymous IP list | Block with `BlockManagedRules`, otherwise count. `HostingProviderIPList` always counts |
-| `RateLimitLogin` | Block more than 100 requests per IP in 5 minutes to `/auth/`, `/login`, or `/api/login` |
+| `RateLimitLogin` | Block more than 100 requests per IP in 5 minutes to `/auth/`, `/login`, `/api/login`, or `/zabbix/index` |
+| `RateLimitZabbixApi` | Block more than 300 requests per IP in 5 minutes to `/zabbix/api_jsonrpc.php` |
 | `RateLimitAll` | Block more than 3,000 requests per IP in 5 minutes |
 | Known bad inputs, core rule set, Linux, Unix, PHP | Block with `BlockManagedRules`, otherwise count. `SizeRestrictions_BODY` and `NoUserAgent_HEADER` always count |
 | Bot Control (common) | Block with `BlockManagedRules`, otherwise count. `CategoryHttpLibrary`, `CategoryScrapingFramework`, `CategorySocialMedia`, and `SignalNonBrowserUserAgent` always count |

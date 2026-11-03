@@ -30,6 +30,7 @@ RULE_ORDER = [
     "AWSManagedRulesAmazonIpReputationList",
     "AWSManagedRulesAnonymousIpList",
     "RateLimitLogin",
+    "RateLimitZabbixApi",
     "RateLimitAll",
     "AWSManagedRulesKnownBadInputsRuleSet",
     "AWSManagedRulesCommonRuleSet",
@@ -270,10 +271,28 @@ def test_rate_limits(template: dict[str, Any]) -> None:
         s["ByteMatchStatement"]
         for s in rate_login["ScopeDownStatement"]["OrStatement"]["Statements"]
     ]
-    assert {m["SearchString"] for m in matches} == {"/api/login", "/auth/", "/login"}
+    assert {m["SearchString"] for m in matches} == {
+        "/api/login",
+        "/auth/",
+        "/login",
+        "/zabbix/index",
+    }
     for match in matches:
         assert match["FieldToMatch"] == {"UriPath": {}}
         assert match["PositionalConstraint"] == "STARTS_WITH"
+
+
+def test_zabbix_api_rate_limit(template: dict[str, Any]) -> None:
+    rule = _rules(template)["RateLimitZabbixApi"]
+    rate = rule["Statement"]["RateBasedStatement"]
+    assert rule["Action"] == {"Block": {}}
+    assert rate["Limit"] == 300
+    assert rate["EvaluationWindowSec"] == 300
+    assert rate["AggregateKeyType"] == "IP"
+    match = rate["ScopeDownStatement"]["ByteMatchStatement"]
+    assert match["FieldToMatch"] == {"UriPath": {}}
+    assert match["PositionalConstraint"] == "STARTS_WITH"
+    assert match["SearchString"] == "/zabbix/api_jsonrpc.php"
 
 
 def test_logs_redact_secrets(template: dict[str, Any]) -> None:
