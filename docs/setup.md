@@ -110,7 +110,7 @@ To undo stage 2, revert the role changes and run the same commands again.
 
 ### Stage 3: switch DNS
 
-Switch the public DNS with `AWS_PROFILE=cloudfront-waf-deploy scripts/switch-dns.sh cloudfront`, then run the checklist in the verification section of the design document, `docs/superpowers/specs/2026-10-22-cloudfront-waf-design.md` (written in Japanese).
+Switch the public DNS with `AWS_PROFILE=cloudfront-waf-deploy scripts/switch-dns.sh cloudfront`, then run the checklist in the verification section of the design document, `docs/superpowers/archive/specs/2026-10-22-cloudfront-waf-design.md` (written in Japanese).
 
 While going through the checklist, watch CouchDB replication. A `_changes` long poll waits up to 60 seconds by default, as long as the origin read timeout, so a poll that runs the full minute can end in a 504 from CloudFront. Check the distribution's `504ErrorRate` metric in CloudWatch (`us-east-1`, `Region=Global`), because those 504s also count toward the Zabbix 5xx trigger. If CouchDB polls cause 504s, have the clients send a `heartbeat` shorter than 60 seconds, so the connection carries data before the timeout.
 

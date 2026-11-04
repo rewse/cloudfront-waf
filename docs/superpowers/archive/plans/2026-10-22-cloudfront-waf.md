@@ -8,7 +8,7 @@
 
 **Tech Stack:** CloudFormation（AWS::CloudFront、AWS::WAFv2、AWS::CertificateManager、AWS::Route53、AWS::Logs）、aws-cli、1Password CLI（`op`）、Bash、Python 3.13 と pytest、uv、cfn-lint、Ansible、Apache 2.4（mod_remoteip）、UniFi Site Manager API、Zabbix。
 
-**Spec:** `docs/superpowers/specs/2026-10-22-cloudfront-waf-design.md`
+**Spec:** `docs/superpowers/archive/specs/2026-10-22-cloudfront-waf-design.md`
 
 ## Global Constraints
 
