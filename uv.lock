@@ -8,7 +8,7 @@ exclude-newer-span = "P4D"
 
 [[package]]
 name = "cfn-lint"
-version = "1.58.0"
+version = "1.59.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonpatch" },
@@ -18,9 +18,9 @@ dependencies = [
     { name = "sympy" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/10/7e/d9395fa56b9f0f014e9e319daca03dd53133abefc2451b85f06ae4dc61dc/cfn_lint-1.58.0.tar.gz", hash = "sha256:ba02cd7f7e06c8bc160936051a03ec931af52943fcc9cc72ad2748caa0f2a103", size = 5077402, upload-time = "2026-10-20T23:48:56.553Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/13/1a/9bd7e804cb01d42e0b3c78e45c14c4d42311a7e8970aeeae494c58a35d17/cfn_lint-1.59.0.tar.gz", hash = "sha256:544e0bf49bcfe49da71aab8b770a50edaffeb4c317f35317a391353565e7187c", size = 5104650, upload-time = "2026-10-28T19:35:04.556Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7d/71/cc6c7176b3003f16903e469cb938c7b8c232d6c233e431634a73a3c10774/cfn_lint-1.58.0-py3-none-any.whl", hash = "sha256:9d9f06043160756a6158f5c3f92a44ce38254b1c578127461608305bc8262987", size = 5703593, upload-time = "2026-10-20T23:48:54.185Z" },
+    { url = "https://files.pythonhosted.org/packages/74/35/70d8dd577245afa04351421694b780cd357d8416c82db3d9f75558985737/cfn_lint-1.59.0-py3-none-any.whl", hash = "sha256:6994da513581dc851747a699007a9c5517244c655377e27511e1eb0a11f499c5", size = 5710706, upload-time = "2026-10-28T19:35:02.157Z" },
 ]
 
 [[package]]
@@ -130,7 +130,7 @@ wheels = [
 
 [[package]]
 name = "pytest"
-version = "9.1.1"
+version = "9.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama", marker = "sys_platform == 'win32'" },
@@ -139,9 +139,9 @@ dependencies = [
     { name = "pluggy" },
     { name = "pygments" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e4/47/b9efed96c114afcfa3c9d3fe98a76a1d14c74a9e266d397cf6eb64be5e01/pytest-9.1.1.tar.gz", hash = "sha256:1088fbde8f2b49d95a549a195707afa7a76a3ce9bcadc26b6d71f0ffda5fe313", size = 1636369, upload-time = "2026-06-19T10:58:32.857Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/79/42/bb4641652e58dedeac2ec51abc1f8cae4fee4ec63899a0999016229a0f2a/pytest-9.2.0.tar.gz", hash = "sha256:97c4f3b1f3c7414aa36465e09b8220f1d03627993bd51b1282e193753c80557b", size = 1797555, upload-time = "2026-10-27T21:30:20.728Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl", hash = "sha256:37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c", size = 386536, upload-time = "2026-06-19T10:58:31.347Z" },
+    { url = "https://files.pythonhosted.org/packages/51/39/1f5d8c8877a0fa327db959c19341d4be61660de1ab6b7391f9eb805bcd67/pytest-9.2.0-py3-none-any.whl", hash = "sha256:07acdcf88ec174f907dc01af70bf52d49b014bbab03faeeade31c96b18c2e588", size = 411776, upload-time = "2026-10-27T21:30:19.131Z" },
 ]
 
 [[package]]
