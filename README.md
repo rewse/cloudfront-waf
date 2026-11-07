@@ -6,7 +6,7 @@ This repository puts Amazon CloudFront and AWS WAF in front of the services that
 
 ```mermaid
 flowchart LR
-  client[Client] -->|"rewse.jp and 13 subdomains"| cf["CloudFront<br/>+ AWS WAF"]
+  client[Client] -->|"rewse.jp and 12 subdomains"| cf["CloudFront<br/>+ AWS WAF"]
   cf -->|"origin.rewse.jp:443<br/>X-Origin-Verify"| udm["UDM<br/>443 from CloudFront only"]
   udm --> apache["Apache on fox<br/>(hotel on failover)"]
   apache --> apps[Home services]
@@ -15,7 +15,7 @@ flowchart LR
   cw[CloudWatch metrics] -.-> zabbix[Zabbix]
 ```
 
-The public names are `rewse.jp` and `calendar-mcp`, `couchdb`, `expense`, `grafana`, `hass`, `litellm`, `mail-mcp`, `nas`, `nvr`, `teslamate`, `www`, `zabbix`, and `zabbix-mcp` under it. In the public zone, each one points at the distribution. The distribution has one origin, `origin.rewse.jp`, which resolves to the home WAN address. It does no caching and forwards every viewer header, so Apache behaves as it did before CloudFront was in front of it. The origin read timeout is 60 seconds.
+The public names are `rewse.jp` and `couchdb`, `expense`, `grafana`, `hass`, `litellm`, `mail-mcp`, `nas`, `nvr`, `teslamate`, `www`, `zabbix`, and `zabbix-mcp` under it. In the public zone, each one points at the distribution. The distribution has one origin, `origin.rewse.jp`, which resolves to the home WAN address. It does no caching and forwards every viewer header, so Apache behaves as it did before CloudFront was in front of it. The origin read timeout is 60 seconds.
 
 Inside the home network and from the VPC behind the VPN, the same names resolve to fox's private address, so those clients do not pass through CloudFront.
 
@@ -69,7 +69,7 @@ When a sub-rule flags legitimate traffic, add a rule action override for it in `
 
 ## Turn on blocking
 
-`BlockManagedRules` in `infra/parameters.json` decides whether the managed groups block. Keep it `"false"` until a count period shows no false positives, then set it to `"true"`. The IP reputation list, the Anonymous IP list, and the other managed groups then block. The sub-rules listed under [WAF rules](#waf-rules) keep counting either way, through the rule action overrides in `infra/template.yaml`. Include the MCP calls to `calendar-mcp.rewse.jp`, `mail-mcp.rewse.jp`, and `zabbix-mcp.rewse.jp` in that check: they come from an HTTP library with a bearer token rather than from a browser, so a managed rule that flags them would cut Muse off from the calendars and mailboxes or the office off from Zabbix. Muse connects from Meta's cloud, which the Anonymous IP list may classify as a hosting provider.
+`BlockManagedRules` in `infra/parameters.json` decides whether the managed groups block. Keep it `"false"` until a count period shows no false positives, then set it to `"true"`. The IP reputation list, the Anonymous IP list, and the other managed groups then block. The sub-rules listed under [WAF rules](#waf-rules) keep counting either way, through the rule action overrides in `infra/template.yaml`. Include the MCP calls to `mail-mcp.rewse.jp` and `zabbix-mcp.rewse.jp` in that check: they come from an HTTP library with a bearer token rather than from a browser, so a managed rule that flags them would cut Muse off from the mailboxes or the office off from Zabbix. Muse connects from Meta's cloud, which the Anonymous IP list may classify as a hosting provider.
 
 `aws cloudformation deploy` keeps the previous value of a parameter it is not given, so changing a template `Default` alone never reaches the stack. Change the value in `infra/parameters.json` and the matching `Default` in `infra/template.yaml` (the tests check that the two agree). Commit both, and run `AWS_PROFILE=cloudfront-waf-deploy scripts/deploy.sh`. To go back, set both to `"false"` and deploy again.
 

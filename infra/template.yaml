@@ -442,7 +442,6 @@ Resources:
         Enabled: true
         Comment: Home services on the Raspberry Pi
         Aliases:
-          - calendar-mcp.rewse.jp
           - couchdb.rewse.jp
           - expense.rewse.jp
           - grafana.rewse.jp
