@@ -1,6 +1,6 @@
 # Setup
 
-This runbook deploys the stack `cloudfront-waf` in Region `us-east-1`, moves the fourteen public names of `rewse.jp` onto it, and rolls the cutover back if needed. The stack creates one CloudFront distribution, an AWS WAF web ACL, the ACM certificate, the WAF log group, and the record `origin.rewse.jp`. The Apache and UDM changes are in `rewse/ansible-playbooks`. [README.md](../README.md) describes how the pieces fit together and the routine operations after the cutover.
+This runbook deploys the stack `cloudfront-waf` in Region `us-east-1`, moves the thirteen public names of `rewse.jp` onto it, and rolls the cutover back if needed. The stack creates one CloudFront distribution, an AWS WAF web ACL, the ACM certificate, the WAF log group, and the record `origin.rewse.jp`. The Apache and UDM changes are in `rewse/ansible-playbooks`. [README.md](../README.md) describes how the pieces fit together and the routine operations after the cutover.
 
 The default AWS profile is read-only. Commands that write to AWS use the profile `cloudfront-waf-deploy`, which assumes the role of the same name, so they start with `AWS_PROFILE=cloudfront-waf-deploy`. The role comes from the stack `cloudfront-waf-deploy-access`, which `infra/deploy-role.yaml` defines; deploy it once with admin credentials:
 
@@ -36,9 +36,9 @@ Every managed rule group starts in count mode, so only the pentest allow rule an
 
 ## Switch DNS
 
-The fourteen public names are `rewse.jp` and thirteen subdomains (`calendar-mcp`, `couchdb`, `expense`, `grafana`, `hass`, `litellm`, `mail-mcp`, `nas`, `nvr`, `teslamate`, `www`, `zabbix`, `zabbix-mcp`). The template cannot own their records: they were created by hand, and a manually created record cannot be imported into `AWS::Route53::RecordSet`. Recreating them through CloudFormation would leave resolvers with a cached NXDOMAIN for up to 900 seconds, the negative-caching time in the zone's SOA.
+The thirteen public names are `rewse.jp` and twelve subdomains (`calendar-mcp`, `couchdb`, `expense`, `grafana`, `hass`, `litellm`, `nas`, `nvr`, `teslamate`, `www`, `zabbix`, `zabbix-mcp`). The template cannot own their records: they were created by hand, and a manually created record cannot be imported into `AWS::Route53::RecordSet`. Recreating them through CloudFormation would leave resolvers with a cached NXDOMAIN for up to 900 seconds, the negative-caching time in the zone's SOA.
 
-`scripts/switch-dns.sh` moves all fourteen names in one atomic UPSERT batch. An UPSERT also creates a record the zone does not have yet, so the same command publishes a newly added name.
+`scripts/switch-dns.sh` moves all thirteen names in one atomic UPSERT batch. An UPSERT also creates a record the zone does not have yet, so the same command publishes a newly added name.
 
 ```sh
 scripts/switch-dns.sh cloudfront --dry-run

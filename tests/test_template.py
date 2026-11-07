@@ -17,7 +17,6 @@ NAMES = {
     "grafana.rewse.jp",
     "hass.rewse.jp",
     "litellm.rewse.jp",
-    "mail-mcp.rewse.jp",
     "nas.rewse.jp",
     "nvr.rewse.jp",
     "rewse.jp",
