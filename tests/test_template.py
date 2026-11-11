@@ -28,6 +28,7 @@ NAMES = {
 
 RULE_ORDER = [
     "AllowSecurityAgentPentest",
+    "FragmentInPath",
     "AWSManagedRulesAmazonIpReputationList",
     "AWSManagedRulesAnonymousIpList",
     "RateLimitLogin",
@@ -185,6 +186,23 @@ def test_pentest_rule_allows_on_exact_header(template: dict[str, Any]) -> None:
     }
     assert match["PositionalConstraint"] == "EXACTLY"
     assert match["SearchString"] == "PentestHeaderValue"
+
+
+def test_fragment_in_path_is_counted(template: dict[str, Any]) -> None:
+    rule = _rules(template)["FragmentInPath"]
+    match = rule["Statement"]["ByteMatchStatement"]
+
+    # Counts until the logs show no false positives; then switch to Block.
+    assert rule["Action"] == {"Count": {}}
+    assert match["FieldToMatch"] == {"UriPath": {}}
+    assert match["PositionalConstraint"] == "CONTAINS"
+    assert match["SearchString"] == "#"
+    assert match["TextTransformations"] == [{"Priority": 0, "Type": "NONE"}]
+    assert rule["VisibilityConfig"] == {
+        "CloudWatchMetricsEnabled": True,
+        "MetricName": "FragmentInPath",
+        "SampledRequestsEnabled": True,
+    }
 
 
 def test_hosting_provider_list_is_count(template: dict[str, Any]) -> None:
