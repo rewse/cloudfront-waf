@@ -92,6 +92,9 @@ Resources:
   # Allow rule and the rate-based rules act from the first deployment; every
   # managed rule group follows BlockManagedRules so it can run in count mode
   # until the WAF logs show its false positives.
+  #
+  # Keep the rules at or below 1,500 WCU: above that, AWS WAF bills an extra
+  # fee per request. Check a change with aws wafv2 check-capacity.
   WebAcl:
     Type: AWS::WAFv2::WebACL
     Properties:
@@ -161,11 +164,16 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesAnonymousIpList
             SampledRequestsEnabled: true
-        # Sign-in paths of Home Assistant (/auth/), Grafana and filebrowser
-        # (/login), Frigate (/api/login), and the Zabbix web UI, whose
-        # password and MFA steps post to /zabbix/index.php and
+        # Sign-in paths of Home Assistant (/auth/), Grafana (/login),
+        # FileBrowser (/api/auth/), Frigate (/api/login), and the Zabbix web
+        # UI, whose password and MFA steps post to /zabbix/index.php and
         # /zabbix/index_mfa.php. Two weeks of logs peaked at 11 requests per
-        # 5 minutes from the owner's IP on the first three.
+        # 5 minutes from the owner's IP on these paths. The path is
+        # URL-decoded and normalized before matching, so percent-encoded
+        # letters, repeated slashes, and ./ segments count as the same path.
+        # One anchored regex covers every prefix: text transformations add
+        # WCU to each statement that applies them, so an OrStatement of byte
+        # matches would cost more.
         - Name: RateLimitLogin
           Priority: 3
           Action:
@@ -176,40 +184,17 @@ Resources:
               EvaluationWindowSec: 300
               AggregateKeyType: IP
               ScopeDownStatement:
-                OrStatement:
-                  Statements:
-                    - ByteMatchStatement:
-                        FieldToMatch:
-                          UriPath: {}
-                        PositionalConstraint: STARTS_WITH
-                        SearchString: /auth/
-                        TextTransformations:
-                          - Priority: 0
-                            Type: LOWERCASE
-                    - ByteMatchStatement:
-                        FieldToMatch:
-                          UriPath: {}
-                        PositionalConstraint: STARTS_WITH
-                        SearchString: /login
-                        TextTransformations:
-                          - Priority: 0
-                            Type: LOWERCASE
-                    - ByteMatchStatement:
-                        FieldToMatch:
-                          UriPath: {}
-                        PositionalConstraint: STARTS_WITH
-                        SearchString: /api/login
-                        TextTransformations:
-                          - Priority: 0
-                            Type: LOWERCASE
-                    - ByteMatchStatement:
-                        FieldToMatch:
-                          UriPath: {}
-                        PositionalConstraint: STARTS_WITH
-                        SearchString: /zabbix/index
-                        TextTransformations:
-                          - Priority: 0
-                            Type: LOWERCASE
+                RegexMatchStatement:
+                  FieldToMatch:
+                    UriPath: {}
+                  RegexString: ^/(?:auth/|login|api/(?:auth/|login)|zabbix/index)
+                  TextTransformations:
+                    - Priority: 0
+                      Type: URL_DECODE
+                    - Priority: 1
+                      Type: NORMALIZE_PATH
+                    - Priority: 2
+                      Type: LOWERCASE
           VisibilityConfig:
             CloudWatchMetricsEnabled: true
             MetricName: RateLimitLogin
@@ -235,6 +220,10 @@ Resources:
                   SearchString: /zabbix/api_jsonrpc.php
                   TextTransformations:
                     - Priority: 0
+                      Type: URL_DECODE
+                    - Priority: 1
+                      Type: NORMALIZE_PATH
+                    - Priority: 2
                       Type: LOWERCASE
           VisibilityConfig:
             CloudWatchMetricsEnabled: true

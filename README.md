@@ -34,12 +34,16 @@ The web ACL evaluates the rules in this order. Rules marked *count* only label a
 | `AllowSecurityAgentPentest` | Allow requests that carry the secret `X-Security-Agent-Pentest` header of [`rewse/security-agent`](https://github.com/rewse/security-agent) |
 | Amazon IP reputation list | Block with `BlockManagedRules`, otherwise count |
 | Anonymous IP list | Block with `BlockManagedRules`, otherwise count. `HostingProviderIPList` always counts |
-| `RateLimitLogin` | Block more than 100 requests per IP in 5 minutes to `/auth/`, `/login`, `/api/login`, or `/zabbix/index` |
+| `RateLimitLogin` | Block more than 100 requests per IP in 5 minutes to `/auth/`, `/login`, `/api/auth/`, `/api/login`, or `/zabbix/index` |
 | `RateLimitZabbixApi` | Block more than 300 requests per IP in 5 minutes to `/zabbix/api_jsonrpc.php` |
 | `RateLimitAll` | Block more than 3,000 requests per IP in 5 minutes |
 | Known bad inputs, core rule set, Linux, Unix, PHP | Block with `BlockManagedRules`, otherwise count. `SizeRestrictions_BODY` and `NoUserAgent_HEADER` always count |
 | Bot Control (common) | Block with `BlockManagedRules`, otherwise count. `CategoryHttpLibrary`, `CategoryScrapingFramework`, `CategorySocialMedia`, and `SignalNonBrowserUserAgent` always count |
 | `GeoLabel` | Count and label requests from outside Japan that do not come from the Amazon corporate network |
+
+The two rate limits on paths match the path after URL decoding, path normalization (repeated slashes and `./` and `../` segments), and lowercasing, so an alternative spelling of a sign-in path counts against the same limit.
+
+Keep the web ACL at or below 1,500 WCU, above which AWS WAF bills an extra fee per request. Text transformations add WCU to each statement that applies them, so `RateLimitLogin` matches all its prefixes with one regex instead of one byte match per prefix. Check a change with `aws wafv2 check-capacity` before deploying it.
 
 Most of the sub-rules that always count match legitimate API callers: Home Assistant webhooks sent by Go-http-client, and Alexa and Tesla, which call too rarely for a count period to show them. The two other Bot Control categories match link previews from iMessage, Slack, and Discord, and Hatena Bookmark, which fetch old `rewse.jp/blog/` links that redirect to `blog.rewse.jp`.
 
