@@ -92,6 +92,9 @@ Resources:
   # Allow rule and the rate-based rules act from the first deployment; every
   # managed rule group follows BlockManagedRules so it can run in count mode
   # until the WAF logs show its false positives.
+  #
+  # Keep the rules at or below 1,500 WCU: above that, AWS WAF bills an extra
+  # fee per request. Check a change with aws wafv2 check-capacity.
   WebAcl:
     Type: AWS::WAFv2::WebACL
     Properties:
@@ -125,8 +128,30 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: AllowSecurityAgentPentest
             SampledRequestsEnabled: true
-        - Name: AWSManagedRulesAmazonIpReputationList
+        # Browsers never send a URI fragment. CloudFront drops a raw # and
+        # everything after it before forwarding to the origin, while the WAF
+        # inspects the path with it, so such a request can be judged on a
+        # path other than the one the origin serves. The rule counts until
+        # the WAF logs show no false positives, then switch it to Block.
+        - Name: FragmentInPath
           Priority: 1
+          Action:
+            Count: {}
+          Statement:
+            ByteMatchStatement:
+              FieldToMatch:
+                UriPath: {}
+              PositionalConstraint: CONTAINS
+              SearchString: "#"
+              TextTransformations:
+                - Priority: 0
+                  Type: NONE
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: FragmentInPath
+            SampledRequestsEnabled: true
+        - Name: AWSManagedRulesAmazonIpReputationList
+          Priority: 2
           OverrideAction: !If
             - BlockManagedRuleGroups
             - None: {}
@@ -144,7 +169,7 @@ Resources:
         # webhook caller, the Alexa backend, probably Tesla), and Alexa and
         # Tesla call too rarely for a count period to reveal false positives.
         - Name: AWSManagedRulesAnonymousIpList
-          Priority: 2
+          Priority: 3
           OverrideAction: !If
             - BlockManagedRuleGroups
             - None: {}
@@ -161,13 +186,18 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: AWSManagedRulesAnonymousIpList
             SampledRequestsEnabled: true
-        # Sign-in paths of Home Assistant (/auth/), Grafana and filebrowser
-        # (/login), Frigate (/api/login), and the Zabbix web UI, whose
-        # password and MFA steps post to /zabbix/index.php and
+        # Sign-in paths of Home Assistant (/auth/), Grafana (/login),
+        # FileBrowser (/api/auth/), Frigate (/api/login), and the Zabbix web
+        # UI, whose password and MFA steps post to /zabbix/index.php and
         # /zabbix/index_mfa.php. Two weeks of logs peaked at 11 requests per
-        # 5 minutes from the owner's IP on the first three.
+        # 5 minutes from the owner's IP on these paths. The path is
+        # URL-decoded and normalized before matching, so percent-encoded
+        # letters, repeated slashes, and ./ segments count as the same path.
+        # One anchored regex covers every prefix: text transformations add
+        # WCU to each statement that applies them, so an OrStatement of byte
+        # matches would cost more.
         - Name: RateLimitLogin
-          Priority: 3
+          Priority: 4
           Action:
             Block: {}
           Statement:
@@ -176,40 +206,17 @@ Resources:
               EvaluationWindowSec: 300
               AggregateKeyType: IP
               ScopeDownStatement:
-                OrStatement:
-                  Statements:
-                    - ByteMatchStatement:
-                        FieldToMatch:
-                          UriPath: {}
-                        PositionalConstraint: STARTS_WITH
-                        SearchString: /auth/
-                        TextTransformations:
-                          - Priority: 0
-                            Type: LOWERCASE
-                    - ByteMatchStatement:
-                        FieldToMatch:
-                          UriPath: {}
-                        PositionalConstraint: STARTS_WITH
-                        SearchString: /login
-                        TextTransformations:
-                          - Priority: 0
-                            Type: LOWERCASE
-                    - ByteMatchStatement:
-                        FieldToMatch:
-                          UriPath: {}
-                        PositionalConstraint: STARTS_WITH
-                        SearchString: /api/login
-                        TextTransformations:
-                          - Priority: 0
-                            Type: LOWERCASE
-                    - ByteMatchStatement:
-                        FieldToMatch:
-                          UriPath: {}
-                        PositionalConstraint: STARTS_WITH
-                        SearchString: /zabbix/index
-                        TextTransformations:
-                          - Priority: 0
-                            Type: LOWERCASE
+                RegexMatchStatement:
+                  FieldToMatch:
+                    UriPath: {}
+                  RegexString: ^/(?:auth/|login|api/(?:auth/|login)|zabbix/index)
+                  TextTransformations:
+                    - Priority: 0
+                      Type: URL_DECODE
+                    - Priority: 1
+                      Type: NORMALIZE_PATH
+                    - Priority: 2
+                      Type: LOWERCASE
           VisibilityConfig:
             CloudWatchMetricsEnabled: true
             MetricName: RateLimitLogin
@@ -219,7 +226,7 @@ Resources:
         # the API without passing through CloudFront, so it does not count
         # here.
         - Name: RateLimitZabbixApi
-          Priority: 4
+          Priority: 5
           Action:
             Block: {}
           Statement:
@@ -235,6 +242,10 @@ Resources:
                   SearchString: /zabbix/api_jsonrpc.php
                   TextTransformations:
                     - Priority: 0
+                      Type: URL_DECODE
+                    - Priority: 1
+                      Type: NORMALIZE_PATH
+                    - Priority: 2
                       Type: LOWERCASE
           VisibilityConfig:
             CloudWatchMetricsEnabled: true
@@ -243,7 +254,7 @@ Resources:
         # Two weeks of logs peaked at 1,100 requests per 5 minutes from the
         # owner's IP, so 3,000 leaves room for webhooks and long polling.
         - Name: RateLimitAll
-          Priority: 5
+          Priority: 6
           Action:
             Block: {}
           Statement:
@@ -256,7 +267,7 @@ Resources:
             MetricName: RateLimitAll
             SampledRequestsEnabled: true
         - Name: AWSManagedRulesKnownBadInputsRuleSet
-          Priority: 6
+          Priority: 7
           OverrideAction: !If
             - BlockManagedRuleGroups
             - None: {}
@@ -275,7 +286,7 @@ Resources:
         # API callers such as Alexa and Tesla call too rarely for the count
         # period to show whether they send a User-Agent.
         - Name: AWSManagedRulesCommonRuleSet
-          Priority: 7
+          Priority: 8
           OverrideAction: !If
             - BlockManagedRuleGroups
             - None: {}
@@ -296,7 +307,7 @@ Resources:
             MetricName: AWSManagedRulesCommonRuleSet
             SampledRequestsEnabled: true
         - Name: AWSManagedRulesLinuxRuleSet
-          Priority: 8
+          Priority: 9
           OverrideAction: !If
             - BlockManagedRuleGroups
             - None: {}
@@ -310,7 +321,7 @@ Resources:
             MetricName: AWSManagedRulesLinuxRuleSet
             SampledRequestsEnabled: true
         - Name: AWSManagedRulesUnixRuleSet
-          Priority: 9
+          Priority: 10
           OverrideAction: !If
             - BlockManagedRuleGroups
             - None: {}
@@ -325,7 +336,7 @@ Resources:
             SampledRequestsEnabled: true
         # The Zabbix web UI is written in PHP.
         - Name: AWSManagedRulesPHPRuleSet
-          Priority: 10
+          Priority: 11
           OverrideAction: !If
             - BlockManagedRuleGroups
             - None: {}
@@ -349,7 +360,7 @@ Resources:
         # link preview fetchers following old rewse.jp/blog/ links, which
         # redirect to blog.rewse.jp.
         - Name: AWSManagedRulesBotControlRuleSet
-          Priority: 11
+          Priority: 12
           OverrideAction: !If
             - BlockManagedRuleGroups
             - None: {}
@@ -382,7 +393,7 @@ Resources:
         # come from the corporate network, so the logs can show them; it
         # never blocks.
         - Name: GeoLabel
-          Priority: 12
+          Priority: 13
           Action:
             Count: {}
           RuleLabels:

@@ -28,6 +28,7 @@ NAMES = {
 
 RULE_ORDER = [
     "AllowSecurityAgentPentest",
+    "FragmentInPath",
     "AWSManagedRulesAmazonIpReputationList",
     "AWSManagedRulesAnonymousIpList",
     "RateLimitLogin",
@@ -56,6 +57,18 @@ COUNT_PHASE_RULE_GROUPS = [
 IPV4_LITERAL = re.compile(r"(?<![\d.v])\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?(?![\d.])")
 
 SECRET_PARAMETERS = ["OfficeCidrs", "OriginVerifyHeaderValue", "PentestHeaderValue"]
+
+# Decoding and normalizing before matching makes spellings such as
+# /%61uth/, //auth/, and /./auth/ count against the same limit as /auth/.
+PATH_TRANSFORMATIONS = [
+    {"Priority": 0, "Type": "URL_DECODE"},
+    {"Priority": 1, "Type": "NORMALIZE_PATH"},
+    {"Priority": 2, "Type": "LOWERCASE"},
+]
+
+# Sign-in prefixes of RateLimitLogin in one anchored regex, which costs fewer
+# WCU than one transformed byte match per prefix.
+LOGIN_PATH_REGEX = r"^/(?:auth/|login|api/(?:auth/|login)|zabbix/index)"
 
 
 @pytest.fixture(scope="module")
@@ -175,6 +188,23 @@ def test_pentest_rule_allows_on_exact_header(template: dict[str, Any]) -> None:
     assert match["SearchString"] == "PentestHeaderValue"
 
 
+def test_fragment_in_path_is_counted(template: dict[str, Any]) -> None:
+    rule = _rules(template)["FragmentInPath"]
+    match = rule["Statement"]["ByteMatchStatement"]
+
+    # Counts until the logs show no false positives; then switch to Block.
+    assert rule["Action"] == {"Count": {}}
+    assert match["FieldToMatch"] == {"UriPath": {}}
+    assert match["PositionalConstraint"] == "CONTAINS"
+    assert match["SearchString"] == "#"
+    assert match["TextTransformations"] == [{"Priority": 0, "Type": "NONE"}]
+    assert rule["VisibilityConfig"] == {
+        "CloudWatchMetricsEnabled": True,
+        "MetricName": "FragmentInPath",
+        "SampledRequestsEnabled": True,
+    }
+
+
 def test_hosting_provider_list_is_count(template: dict[str, Any]) -> None:
     rule = _rules(template)["AWSManagedRulesAnonymousIpList"]
 
@@ -268,19 +298,38 @@ def test_rate_limits(template: dict[str, Any]) -> None:
     assert rate_login["EvaluationWindowSec"] == 300
     assert rate_login["AggregateKeyType"] == "IP"
     assert rules["RateLimitLogin"]["Action"] == {"Block": {}}
-    matches = [
-        s["ByteMatchStatement"]
-        for s in rate_login["ScopeDownStatement"]["OrStatement"]["Statements"]
-    ]
-    assert {m["SearchString"] for m in matches} == {
-        "/api/login",
-        "/auth/",
-        "/login",
-        "/zabbix/index",
-    }
-    for match in matches:
-        assert match["FieldToMatch"] == {"UriPath": {}}
-        assert match["PositionalConstraint"] == "STARTS_WITH"
+    match = rate_login["ScopeDownStatement"]["RegexMatchStatement"]
+    assert match["FieldToMatch"] == {"UriPath": {}}
+    assert match["RegexString"] == LOGIN_PATH_REGEX
+    assert match["TextTransformations"] == PATH_TRANSFORMATIONS
+
+
+# The transformations run before the regex, so the samples are already
+# decoded, normalized, and lowercased. The regex keeps the prefix semantics
+# of STARTS_WITH, so /loginx matches as /login does.
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("/", False),
+        ("/api/auth/login", True),
+        ("/api/login", True),
+        ("/api/other", False),
+        ("/auth/x", True),
+        ("/grafana/login", False),
+        ("/login", True),
+        ("/loginx", True),
+        ("/zabbix/api_jsonrpc.php", False),
+        ("/zabbix/index.php", True),
+        ("/zabbix/index_mfa.php", True),
+    ],
+)
+def test_login_path_regex_matches_prefixes(
+    template: dict[str, Any], path: str, expected: bool
+) -> None:
+    rate_login = _rules(template)["RateLimitLogin"]["Statement"]["RateBasedStatement"]
+    regex = rate_login["ScopeDownStatement"]["RegexMatchStatement"]["RegexString"]
+
+    assert bool(re.search(regex, path)) is expected
 
 
 def test_zabbix_api_rate_limit(template: dict[str, Any]) -> None:
@@ -294,6 +343,7 @@ def test_zabbix_api_rate_limit(template: dict[str, Any]) -> None:
     assert match["FieldToMatch"] == {"UriPath": {}}
     assert match["PositionalConstraint"] == "STARTS_WITH"
     assert match["SearchString"] == "/zabbix/api_jsonrpc.php"
+    assert match["TextTransformations"] == PATH_TRANSFORMATIONS
 
 
 def test_logs_redact_secrets(template: dict[str, Any]) -> None:
