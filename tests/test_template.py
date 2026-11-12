@@ -67,8 +67,10 @@ PATH_TRANSFORMATIONS = [
 ]
 
 # Sign-in prefixes of RateLimitLogin in one anchored regex, which costs fewer
-# WCU than one transformed byte match per prefix.
-LOGIN_PATH_REGEX = r"^/(?:auth/|login|api/(?:auth/|login)|zabbix/index)"
+# WCU than one transformed byte match per prefix. Zabbix also serves its
+# login form at the bare directory URL, so /zabbix/ and /zabbix match as
+# whole paths while other pages under /zabbix/ do not.
+LOGIN_PATH_REGEX = r"^/(?:auth/|login|api/(?:auth/|login)|zabbix(?:/index|/?$))"
 
 
 @pytest.fixture(scope="module")
@@ -306,7 +308,9 @@ def test_rate_limits(template: dict[str, Any]) -> None:
 
 # The transformations run before the regex, so the samples are already
 # decoded, normalized, and lowercased. The regex keeps the prefix semantics
-# of STARTS_WITH, so /loginx matches as /login does.
+# of STARTS_WITH, so /loginx matches as /login does. NORMALIZE_PATH may or
+# may not keep a trailing slash, so //zabbix// and /Zabbix/ reach the regex
+# as either /zabbix/ or /zabbix, and both must match.
 @pytest.mark.parametrize(
     ("path", "expected"),
     [
@@ -318,9 +322,14 @@ def test_rate_limits(template: dict[str, Any]) -> None:
         ("/grafana/login", False),
         ("/login", True),
         ("/loginx", True),
+        ("/zabbix", True),
+        ("/zabbix/", True),
         ("/zabbix/api_jsonrpc.php", False),
         ("/zabbix/index.php", True),
         ("/zabbix/index_mfa.php", True),
+        ("/zabbix/zabbix.php", False),
+        ("/zabbixx", False),
+        ("/zabbix//x", False),
     ],
 )
 def test_login_path_regex_matches_prefixes(

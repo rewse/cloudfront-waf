@@ -189,8 +189,12 @@ Resources:
         # Sign-in paths of Home Assistant (/auth/), Grafana (/login),
         # FileBrowser (/api/auth/), Frigate (/api/login), and the Zabbix web
         # UI, whose password and MFA steps post to /zabbix/index.php and
-        # /zabbix/index_mfa.php. Two weeks of logs peaked at 11 requests per
-        # 5 minutes from the owner's IP on these paths. The path is
+        # /zabbix/index_mfa.php. Zabbix also serves and accepts its login form
+        # at the directory URL, so /zabbix/ and /zabbix match as whole paths;
+        # the trailing-slash form is optional because path normalization may
+        # drop it. Other pages under /zabbix/ do not match. Two weeks of logs
+        # peaked at 11 requests per 5 minutes from the owner's IP on these
+        # paths. The path is
         # URL-decoded and normalized before matching, so percent-encoded
         # letters, repeated slashes, and ./ segments count as the same path.
         # One anchored regex covers every prefix: text transformations add
@@ -209,7 +213,7 @@ Resources:
                 RegexMatchStatement:
                   FieldToMatch:
                     UriPath: {}
-                  RegexString: ^/(?:auth/|login|api/(?:auth/|login)|zabbix/index)
+                  RegexString: ^/(?:auth/|login|api/(?:auth/|login)|zabbix(?:/index|/?$))
                   TextTransformations:
                     - Priority: 0
                       Type: URL_DECODE
