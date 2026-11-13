@@ -35,7 +35,7 @@ The web ACL evaluates the rules in this order. Rules marked *count* only label a
 | `FragmentInPath` | Count requests whose path contains a literal `#`. CloudFront drops the fragment before forwarding, so the WAF and the origin would see different paths. Switch it to Block once the logs show no false positives |
 | Amazon IP reputation list | Block with `BlockManagedRules`, otherwise count |
 | Anonymous IP list | Block with `BlockManagedRules`, otherwise count. `HostingProviderIPList` always counts |
-| `RateLimitLogin` | Block more than 100 requests per IP in 5 minutes to `/auth/`, `/login`, `/api/auth/`, `/api/login`, or `/zabbix/index` |
+| `RateLimitLogin` | Block more than 100 requests per IP in 5 minutes to `/auth/`, `/login`, `/api/auth/`, `/api/login`, or `/zabbix/index`, and to exactly `/zabbix/` |
 | `RateLimitZabbixApi` | Block more than 300 requests per IP in 5 minutes to `/zabbix/api_jsonrpc.php` |
 | `RateLimitAll` | Block more than 3,000 requests per IP in 5 minutes |
 | Known bad inputs, core rule set, Linux, Unix, PHP | Block with `BlockManagedRules`, otherwise count. `SizeRestrictions_BODY` and `NoUserAgent_HEADER` always count |
