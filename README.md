@@ -31,7 +31,7 @@ The web ACL evaluates the rules in this order. Rules marked *count* only label a
 
 | Rule | Action |
 |---|---|
-| `AllowSecurityAgentPentest` | Allow requests that carry the secret `X-Continuum-Pentest` header, which the AWS Security Agent pentests of [`rewse/continuum`](https://github.com/rewse/continuum) send |
+| `AllowSecurityAgentPentest` | Allow requests that carry the secret `X-Continuum-Pentest` header, which the AWS Security Agent pentests of [`rewse/security-findings`](https://github.com/rewse/security-findings) send |
 | `FragmentInPath` | Count requests whose path contains a literal `#`. CloudFront drops the fragment before forwarding, so the WAF and the origin would see different paths. Switch it to Block once the logs show no false positives |
 | Amazon IP reputation list | Block with `BlockManagedRules`, otherwise count |
 | Anonymous IP list | Block with `BlockManagedRules`, otherwise count. `HostingProviderIPList` always counts |
@@ -82,7 +82,7 @@ When a sub-rule flags legitimate traffic, add a rule action override for it in `
 
 The egress CIDRs change in 1Password and take effect on the next deploy. After changing them, also apply the `httpd_conf` tag to fox and hotel, and the `zabbix_server_frontend` and `zabbix_mcp_apache` tags to fox. Apache renders the same list into the `/admin`, `/server-status`, and `/zabbix` allowlists and the `zabbix-mcp.rewse.jp` vhost.
 
-The pentest header has three copies besides 1Password: the WAF allow rule in this stack, `security-agent-pentest.conf` in Apache (fail2ban never bans an address that sent the header), and the Secrets Manager secret `continuum/pentest-header` that the pentests of `rewse/continuum` send. The WAF rule, the log redaction, Apache, and the pentests must all use the header name `X-Continuum-Pentest`; with any other name the pentests run through the WAF and its logs keep the value. After changing the password in 1Password, update all three in this order:
+The pentest header has three copies besides 1Password: the WAF allow rule in this stack, `security-agent-pentest.conf` in Apache (fail2ban never bans an address that sent the header), and the Secrets Manager secret `continuum/pentest-header` that the pentests of `rewse/security-findings` send. The WAF rule, the log redaction, Apache, and the pentests must all use the header name `X-Continuum-Pentest`; with any other name the pentests run through the WAF and its logs keep the value. After changing the password in 1Password, update all three in this order:
 
 1. Deploy this stack.
 2. Apply the `httpd_security_agent` tag to fox and hotel.
@@ -93,7 +93,7 @@ The pentest header has three copies besides 1Password: the WAF allow rule in thi
      --region us-east-1 --secret-id continuum/pentest-header --secret-string file:///dev/stdin
    ```
 
-4. Update each pentest that sends the header. The `continuum` stack in `rewse/continuum` resolves the secret only when it creates or updates a pentest, and redeploying an unchanged template updates nothing, so call `UpdatePentest` with the `continuum-deploy` profile instead. Pass every field that `BatchGetPentests` returns for the pentest, with only the `X-Continuum-Pentest` value in `networkTrafficConfig` replaced, and compare the pentest before and after. Do this while no pentest job is running.
+4. Update each pentest that sends the header. The `continuum` stack in `rewse/security-findings` resolves the secret only when it creates or updates a pentest, and redeploying an unchanged template updates nothing, so call `UpdatePentest` with the `continuum-deploy` profile instead. Pass every field that `BatchGetPentests` returns for the pentest, with only the `X-Continuum-Pentest` value in `networkTrafficConfig` replaced, and compare the pentest before and after. Do this while no pentest job is running.
 
 Until the three agree, the WAF blocks the pentest or fail2ban bans it partway through a run.
 
