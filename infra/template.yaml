@@ -18,8 +18,8 @@ Parameters:
     NoEcho: true
     MinLength: 1
     Description: >-
-      Value of the X-Security-Agent-Pentest header that lets the AWS Security
-      Agent pentest bypass the WAF.
+      Value of the X-Continuum-Pentest header that the AWS Security Agent
+      pentests of rewse/continuum send, which lets them bypass the WAF.
   OfficeCidrs:
     Type: CommaDelimitedList
     NoEcho: true
@@ -109,7 +109,9 @@ Resources:
         SampledRequestsEnabled: true
       Rules:
         # The pentest skips the WAF so that it measures the applications
-        # themselves. The header value is a secret, and the logs redact it.
+        # themselves. The header name must match the one the pentests send;
+        # otherwise they run through the WAF and the logs keep the value
+        # unredacted. The header value is a secret, and the logs redact it.
         - Name: AllowSecurityAgentPentest
           Priority: 0
           Action:
@@ -118,7 +120,7 @@ Resources:
             ByteMatchStatement:
               FieldToMatch:
                 SingleHeader:
-                  Name: x-security-agent-pentest
+                  Name: x-continuum-pentest
               PositionalConstraint: EXACTLY
               SearchString: !Ref PentestHeaderValue
               TextTransformations:
@@ -442,7 +444,7 @@ Resources:
         - SingleHeader:
             Name: cookie
         - SingleHeader:
-            Name: x-security-agent-pentest
+            Name: x-continuum-pentest
 
   # Caching is disabled and every viewer header, query string, and cookie
   # goes to the origin, so Apache keeps routing by Host header as it does

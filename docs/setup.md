@@ -18,7 +18,7 @@ You need the AWS CLI, `uv`, and the 1Password CLI (`op`) signed in. The deploy r
 | Item | ID | Field | Used for |
 | --- | --- | --- | --- |
 | Amazon CloudFront - Origin Verify | `kgap2pevj7exae5jnvlsewbs7y` | `password` | The `X-Origin-Verify` header that CloudFront adds to every origin request |
-| AWS Security Agent pentest header | `m6obpvalg7ekdi5nsf4yx6wi3q` | `password` | The `X-Security-Agent-Pentest` value that lets the pentest bypass the WAF |
+| AWS Security Agent pentest header | `m6obpvalg7ekdi5nsf4yx6wi3q` | `password` | The `X-Continuum-Pentest` value that lets the pentests bypass the WAF |
 | Amazon Corporate Network - Egress | `rocgj7m2grqpdwb4gvcqbktvhm` | `ipv4` | Comma-separated egress CIDRs for the geo label and the Apache allowlists |
 
 The Ansible roles read the same items. If `op` asks for approval, approve it in 1Password and rerun the command.
