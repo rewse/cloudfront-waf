@@ -82,16 +82,18 @@ When a sub-rule flags legitimate traffic, add a rule action override for it in `
 
 The egress CIDRs change in 1Password and take effect on the next deploy. After changing them, also apply the `httpd_conf` tag to fox and hotel, and the `zabbix_server_frontend` and `zabbix_mcp_apache` tags to fox. Apache renders the same list into the `/admin`, `/server-status`, and `/zabbix` allowlists and the `zabbix-mcp.rewse.jp` vhost.
 
-The pentest header has three copies besides 1Password: the WAF allow rule in this stack, `security-agent-pentest.conf` in Apache (fail2ban never bans an address that sent the header), and the Secrets Manager secret `continuum/pentest-header` that the pentests of `rewse/continuum` send. The WAF rule, the log redaction, Apache, and the pentests must all use the header name `X-Continuum-Pentest`; with any other name the pentests run through the WAF and its logs keep the value. After changing the password in 1Password, update all three:
+The pentest header has three copies besides 1Password: the WAF allow rule in this stack, `security-agent-pentest.conf` in Apache (fail2ban never bans an address that sent the header), and the Secrets Manager secret `continuum/pentest-header` that the pentests of `rewse/continuum` send. The WAF rule, the log redaction, Apache, and the pentests must all use the header name `X-Continuum-Pentest`; with any other name the pentests run through the WAF and its logs keep the value. After changing the password in 1Password, update all three in this order:
 
 1. Deploy this stack.
 2. Apply the `httpd_security_agent` tag to fox and hotel.
-3. Copy the value to Secrets Manager, then update the pentests of the `continuum` stack in `rewse/continuum`, which read the secret only when CloudFormation creates or updates them:
+3. Copy the value to Secrets Manager:
 
    ```sh
    op read -n op://ansible/m6obpvalg7ekdi5nsf4yx6wi3q/password | AWS_PROFILE=continuum-deploy aws secretsmanager put-secret-value \
      --region us-east-1 --secret-id continuum/pentest-header --secret-string file:///dev/stdin
    ```
+
+4. Update each pentest that sends the header. The `continuum` stack in `rewse/continuum` resolves the secret only when it creates or updates a pentest, and redeploying an unchanged template updates nothing, so call `UpdatePentest` with the `continuum-deploy` profile instead. Pass every field that `BatchGetPentests` returns for the pentest, with only the `X-Continuum-Pentest` value in `networkTrafficConfig` replaced, and compare the pentest before and after. Do this while no pentest job is running.
 
 Until the three agree, the WAF blocks the pentest or fail2ban bans it partway through a run.
 
