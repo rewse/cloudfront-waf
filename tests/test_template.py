@@ -183,9 +183,7 @@ def test_pentest_rule_allows_on_exact_header(template: dict[str, Any]) -> None:
 
     assert rule["Priority"] == 0
     assert rule["Action"] == {"Allow": {}}
-    assert match["FieldToMatch"] == {
-        "SingleHeader": {"Name": "x-security-agent-pentest"}
-    }
+    assert match["FieldToMatch"] == {"SingleHeader": {"Name": "x-continuum-pentest"}}
     assert match["PositionalConstraint"] == "EXACTLY"
     assert match["SearchString"] == "PentestHeaderValue"
 
@@ -363,7 +361,7 @@ def test_logs_redact_secrets(template: dict[str, Any]) -> None:
         for field in logging["Properties"]["RedactedFields"]
     }
 
-    assert {"authorization", "cookie", "x-security-agent-pentest"} <= redacted
+    assert {"authorization", "cookie", "x-continuum-pentest"} <= redacted
     assert log_group["Properties"]["LogGroupName"].startswith("aws-waf-logs-")
     assert logging["Properties"]["LogDestinationConfigs"] == [
         "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:"
