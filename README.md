@@ -32,7 +32,7 @@ The web ACL evaluates the rules in this order. Rules marked *count* only label a
 | Rule | Action |
 |---|---|
 | `AllowSecurityAgentPentest` | Allow requests that carry the secret `X-Continuum-Pentest` header, which the AWS Security Agent pentests of [`rewse/security-findings`](https://github.com/rewse/security-findings) send |
-| `FragmentInPath` | Count requests whose path contains a literal `#`. CloudFront drops the fragment before forwarding, so the WAF and the origin would see different paths. Switch it to Block once the logs show no false positives |
+| `FragmentInPath` | Block requests whose path contains a literal `#`. CloudFront drops the fragment before forwarding, so the WAF and the origin would see different paths |
 | Amazon IP reputation list | Block with `BlockManagedRules`, otherwise count |
 | Anonymous IP list | Block with `BlockManagedRules`, otherwise count. `HostingProviderIPList` always counts |
 | `RateLimitLogin` | Block more than 100 requests per IP in 5 minutes to `/auth/`, `/login`, `/api/auth/`, `/api/login`, or `/zabbix/index`, and to exactly `/zabbix/` |

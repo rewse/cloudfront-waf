@@ -188,12 +188,11 @@ def test_pentest_rule_allows_on_exact_header(template: dict[str, Any]) -> None:
     assert match["SearchString"] == "PentestHeaderValue"
 
 
-def test_fragment_in_path_is_counted(template: dict[str, Any]) -> None:
+def test_fragment_in_path_is_blocked(template: dict[str, Any]) -> None:
     rule = _rules(template)["FragmentInPath"]
     match = rule["Statement"]["ByteMatchStatement"]
 
-    # Counts until the logs show no false positives; then switch to Block.
-    assert rule["Action"] == {"Count": {}}
+    assert rule["Action"] == {"Block": {}}
     assert match["FieldToMatch"] == {"UriPath": {}}
     assert match["PositionalConstraint"] == "CONTAINS"
     assert match["SearchString"] == "#"

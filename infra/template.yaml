@@ -133,12 +133,11 @@ Resources:
         # Browsers never send a URI fragment. CloudFront drops a raw # and
         # everything after it before forwarding to the origin, while the WAF
         # inspects the path with it, so such a request can be judged on a
-        # path other than the one the origin serves. The rule counts until
-        # the WAF logs show no false positives, then switch it to Block.
+        # path other than the one the origin serves.
         - Name: FragmentInPath
           Priority: 1
           Action:
-            Count: {}
+            Block: {}
           Statement:
             ByteMatchStatement:
               FieldToMatch:
