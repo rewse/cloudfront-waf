@@ -229,9 +229,12 @@ def test_bot_control_api_client_rules_are_always_count(
     rule = _rules(template)["AWSManagedRulesBotControlRuleSet"]
 
     # Home Assistant webhooks arrive from Go-http-client, and Alexa and Tesla
-    # call too rarely for the count period to show them. The other two
-    # categories match link previews and Hatena fetching old rewse.jp links.
+    # call too rarely for the count period to show them. The four categories
+    # match link previews, AI assistants, and Hatena fetching old rewse.jp
+    # links.
     assert _action_overrides(rule) == {
+        "CategoryAI": {"Count": {}},
+        "CategoryContentFetcher": {"Count": {}},
         "CategoryHttpLibrary": {"Count": {}},
         "CategoryScrapingFramework": {"Count": {}},
         "CategorySocialMedia": {"Count": {}},

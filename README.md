@@ -39,7 +39,7 @@ The web ACL evaluates the rules in this order. Rules marked *count* only label a
 | `RateLimitZabbixApi` | Block more than 300 requests per IP in 5 minutes to `/zabbix/api_jsonrpc.php` |
 | `RateLimitAll` | Block more than 3,000 requests per IP in 5 minutes |
 | Known bad inputs, core rule set, Linux, Unix, PHP | Block with `BlockManagedRules`, otherwise count. `SizeRestrictions_BODY` and `NoUserAgent_HEADER` always count |
-| Bot Control (common) | Block with `BlockManagedRules`, otherwise count. `CategoryHttpLibrary`, `CategoryScrapingFramework`, `CategorySocialMedia`, and `SignalNonBrowserUserAgent` always count |
+| Bot Control (common) | Block with `BlockManagedRules`, otherwise count. `CategoryAI`, `CategoryContentFetcher`, `CategoryHttpLibrary`, `CategoryScrapingFramework`, `CategorySocialMedia`, and `SignalNonBrowserUserAgent` always count |
 | `GeoLabel` | Count and label requests from outside Japan that do not come from the Amazon corporate network |
 
 The two rate limits on paths match the path after URL decoding, path normalization (repeated slashes and `./` and `../` segments), and lowercasing, so an alternative spelling of a sign-in path counts against the same limit.
